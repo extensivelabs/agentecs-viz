@@ -16,6 +16,7 @@ tasks:
       - task: _setup-local-agentecs
       - '{{.UV}} pip install -e ".[dev]"'
       - task: _frontend-install
+      - task: frontend:build
       - task: _install-hooks
       - echo "Ready! Run 'task --list' for commands"
 
