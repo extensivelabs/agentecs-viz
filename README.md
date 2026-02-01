@@ -41,21 +41,29 @@ Open [http://localhost:8000](http://localhost:8000) in your browser.
 ## Development
 
 ```bash
-# Clone the repo
 git clone https://github.com/extensivelabs/agentecs-viz
 cd agentecs-viz
-
-# Set up development environment
-task setup
-
-# Run tests
-task test
-
-# Start dev server with mock data
-task serve
+task install    # Sets up venv, deps, frontend, hooks
+task test       # Run tests
+task serve      # Start server with mock data
 ```
 
-See [Taskfile.yml](Taskfile.yml) for all available tasks.
+**Available tasks:** `task --list`
+
+### Local Development with agentecs
+
+For simultaneous development of both packages:
+
+```bash
+# Clone repos side by side
+git clone https://github.com/extensivelabs/agentecs
+git clone https://github.com/extensivelabs/agentecs-viz
+
+cd agentecs-viz
+task install    # Auto-detects ../agentecs and installs as editable
+```
+
+For custom paths: `uv pip install -e /path/to/agentecs` before `task install`
 
 ## License
 

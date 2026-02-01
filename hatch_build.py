@@ -29,6 +29,10 @@ class FrontendBuildHook(BuildHookInterface):
             version: The version being built.
             build_data: Build configuration data.
         """
+        # Skip frontend bundling for editable installs (dev mode)
+        if version == "editable":
+            return
+
         root = Path(self.root)
         frontend_src = root / "frontend" / "dist"
         frontend_dest = root / "src" / "agentecs_viz" / "frontend"

@@ -75,10 +75,13 @@ class TestFrontendDir:
     """Tests for frontend directory resolution."""
 
     def test_get_frontend_dir_finds_dist(self) -> None:
-        """Frontend dir should resolve to the dist folder."""
-        frontend_dir = get_frontend_dir()
-        assert frontend_dir.exists()
-        assert frontend_dir.name == "dist"
+        """Frontend dir should resolve to the dist folder when built."""
+        try:
+            frontend_dir = get_frontend_dir()
+            assert frontend_dir.exists()
+            assert frontend_dir.name == "dist"
+        except FileNotFoundError:
+            pytest.skip("Frontend not built (run 'task frontend:build')")
 
 
 class TestLoadWorldSource:
