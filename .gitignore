@@ -22,6 +22,7 @@ frontend/node_modules/
 .env.local
 .venv/
 .direnv/
+.task/
 
 # AI agents (local-only, developers should add to global gitignore)
 .claude/
