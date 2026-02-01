@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+/* Custom theme for AgentECS Visualizer */
+@theme {
+  /* Dark theme colors inspired by "petri dish" aesthetic */
+  --color-bg-primary: #0a0a0f;
+  --color-bg-secondary: #12121a;
+  --color-bg-tertiary: #1a1a24;
+
+  --color-text-primary: #e8e8ed;
+  --color-text-secondary: #a0a0b0;
+  --color-text-muted: #606070;
+
+  --color-accent: #4f8eff;
+  --color-accent-hover: #6ba1ff;
+
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
+
+  /* Entity/archetype colors - will be extended */
+  --color-entity-agent: #8b5cf6;
+  --color-entity-task: #06b6d4;
+  --color-entity-resource: #f59e0b;
+}
+
+/* Base styles */
+:root {
+  font-family: system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-primary);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}

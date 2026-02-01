@@ -1,0 +1,202 @@
+version: '3'
+
+vars:
+  PYTHON: python3
+  UV: uv
+  SRC_DIR: src
+  TEST_DIR: tests
+
+tasks:
+
+  setup:
+    desc: Initialize development environment (run this first)
+    cmds:
+      - task: _check-tools
+      - task: _create-venv
+      - task: install
+      - task: frontend:install
+      - task: _install-hooks
+      - echo "Development environment ready!"
+      - echo "Run 'task --list' to see available commands"
+
+  _check-tools:
+    internal: true
+    desc: Check required tools are installed
+    cmds:
+      - |
+        command -v {{.UV}} >/dev/null 2>&1 || { echo "Error: uv not found. Install from https://docs.astral.sh/uv/"; exit 1; }
+      - |
+        command -v git >/dev/null 2>&1 || { echo "Error: git not found"; exit 1; }
+      - |
+        command -v npm >/dev/null 2>&1 || { echo "Error: npm not found"; exit 1; }
+    silent: true
+
+  _create-venv:
+    internal: true
+    desc: Create virtual environment with uv
+    cmds:
+      - '{{.UV}} venv --python {{.PYTHON}}'
+    status:
+      - test -d .venv
+
+  install:
+    desc: Install dependencies with uv
+    cmds:
+      - '{{.UV}} pip install -e ".[dev]"'
+    sources:
+      - pyproject.toml
+
+  _install-hooks:
+    internal: true
+    desc: Install pre-commit hooks
+    cmds:
+      - '{{.UV}} run pre-commit install'
+    status:
+      - test -f .git/hooks/pre-commit
+
+  # === Testing ===
+
+  test:
+    desc: Run all tests
+    cmds:
+      - '{{.UV}} run pytest {{.CLI_ARGS}}'
+
+  test:coverage:
+    desc: Run tests with coverage report
+    cmds:
+      - '{{.UV}} run pytest --cov={{.SRC_DIR}}/agentecs_viz --cov-report=term-missing --cov-report=html --cov-branch {{.CLI_ARGS}}'
+      - echo "Coverage report generated in htmlcov/index.html"
+
+  # === Code Quality ===
+
+  lint:
+    desc: Run ruff linting
+    cmds:
+      - '{{.UV}} run ruff check {{.SRC_DIR}} {{.TEST_DIR}}'
+
+  lint:fix:
+    desc: Run ruff linting and auto-fix issues
+    cmds:
+      - '{{.UV}} run ruff check --fix {{.SRC_DIR}} {{.TEST_DIR}}'
+
+  format:
+    desc: Auto-format code with ruff
+    cmds:
+      - '{{.UV}} run ruff format {{.SRC_DIR}} {{.TEST_DIR}}'
+
+  format:check:
+    desc: Check code formatting without changes
+    cmds:
+      - '{{.UV}} run ruff format --check {{.SRC_DIR}} {{.TEST_DIR}}'
+
+  type:check:
+    desc: Run mypy type checking
+    cmds:
+      - '{{.UV}} run mypy {{.SRC_DIR}}'
+
+  check:
+    desc: Run all checks (lint, format, type, test)
+    cmds:
+      - task: format:check
+      - task: lint
+      - task: type:check
+      - task: test
+      - echo "All checks passed!"
+
+  # === Server ===
+
+  serve:
+    desc: Start viz server with mock data (auto-builds frontend)
+    deps:
+      - frontend:build
+    cmds:
+      - '{{.UV}} run agentecs-viz serve --mock {{.CLI_ARGS}}'
+
+  serve:dev:
+    desc: Start viz server with mock data (uses frontend dev server)
+    cmds:
+      - '{{.UV}} run agentecs-viz serve --mock {{.CLI_ARGS}}'
+
+  # === Build ===
+
+  build:
+    desc: Build wheel with bundled frontend
+    deps:
+      - frontend:build
+    cmds:
+      - '{{.UV}} build --wheel'
+      - echo "Wheel built in dist/"
+      - 'echo "Install with: pip install dist/agentecs_viz-*.whl"'
+
+  # === Frontend Tasks ===
+
+  frontend:install:
+    desc: Install frontend dependencies
+    dir: frontend
+    cmds:
+      - npm install
+    status:
+      - test -d node_modules
+
+  frontend:dev:
+    desc: Start frontend dev server
+    dir: frontend
+    cmds:
+      - npm run dev
+
+  frontend:build:
+    desc: Build frontend for production
+    dir: frontend
+    sources:
+      - src/**/*
+      - package.json
+      - vite.config.ts
+      - tsconfig.json
+    generates:
+      - dist/**/*
+    cmds:
+      - npm run build
+
+  frontend:check:
+    desc: Type-check frontend
+    dir: frontend
+    cmds:
+      - npm run check
+
+  frontend:test:
+    desc: Run frontend tests
+    dir: frontend
+    cmds:
+      - npm run test
+
+  # === Cleanup ===
+
+  clean:
+    desc: Remove build artifacts and caches
+    cmds:
+      - rm -rf build/
+      - rm -rf dist/
+      - rm -rf *.egg-info
+      - rm -rf .pytest_cache/
+      - rm -rf .mypy_cache/
+      - rm -rf .ruff_cache/
+      - rm -rf htmlcov/
+      - rm -rf .coverage
+      - rm -rf src/agentecs_viz/frontend/
+      - find . -type d -name __pycache__ -exec rm -rf {} +
+      - find . -type f -name "*.pyc" -delete
+      - echo "Cleaned build artifacts and caches"
+
+  clean:venv:
+    desc: Remove virtual environment (use before full reinstall)
+    cmds:
+      - rm -rf .venv/
+      - echo "Removed virtual environment"
+      - echo "Run 'task setup' to recreate"
+
+  clean:frontend:
+    desc: Remove frontend build and dependencies
+    cmds:
+      - rm -rf frontend/node_modules/
+      - rm -rf frontend/dist/
+      - echo "Cleaned frontend artifacts"

@@ -1,0 +1,34 @@
+# Bundled frontend (only in wheel, not in git)
+# This directory is created by hatch_build.py during wheel build
+src/agentecs_viz/frontend/
+
+# Build artifacts
+dist/
+*.egg-info/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# Frontend build output (separate from bundled)
+frontend/dist/
+frontend/node_modules/
+
+# Environment
+.env
+.env.local
+.venv/
+.direnv/
+
+# AI agents (local-only, developers should add to global gitignore)
+.claude/
+.kiro/
+.agents/
+.archive/
+
+# IDE
+.vscode/
+.idea/
