@@ -28,7 +28,7 @@ def _serialize_component(component: Any) -> dict[str, Any]:
     """
     if hasattr(component, "model_dump"):
         # Pydantic model
-        return component.model_dump()
+        return component.model_dump()  # type: ignore[no-any-return]
     elif hasattr(component, "__dataclass_fields__"):
         # Dataclass
         from dataclasses import asdict

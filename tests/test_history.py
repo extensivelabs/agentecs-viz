@@ -7,6 +7,7 @@ Why these tests exist:
 """
 
 from agentecs.tracing import HistoryStore, TickRecord
+
 from agentecs_viz.history import InMemoryHistoryStore, compute_entity_lifecycles
 
 

@@ -178,7 +178,7 @@ def create_app(
                                 )
                             else:
                                 tick = cmd.params.get("tick", 0)
-                                snapshot = await source.seek(int(tick))  # type: ignore[union-attr]
+                                snapshot = await source.seek(int(tick))  # type: ignore[attr-defined]
                                 if snapshot:
                                     await websocket.send_json(
                                         {

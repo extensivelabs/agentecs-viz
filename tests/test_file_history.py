@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from agentecs.tracing import HistoryStore, TickRecord
+
 from agentecs_viz.history import FileHistoryStore
 
 

@@ -13,6 +13,10 @@ Usage:
 
     agentecs-viz replay trace.jsonl      # Replay a recorded trace
     agentecs-viz replay trace.jsonl --speed 2.0  # Replay at 2x speed
+
+    agentecs-viz observe host:8000       # Observe a remote server
+    agentecs-viz observe ws://host:8000/ws  # Explicit WebSocket URL
+    agentecs-viz observe host:8000 --record-to session.jsonl  # Observe and record
 """
 
 from __future__ import annotations
@@ -74,11 +78,11 @@ def load_world_source(module_path: str) -> WorldStateSource:
 
     # Try get_world_source() function first
     if hasattr(module, "get_world_source"):
-        return module.get_world_source()
+        return module.get_world_source()  # type: ignore[no-any-return]
 
     # Try world_source attribute
     if hasattr(module, "world_source"):
-        return module.world_source
+        return module.world_source  # type: ignore[no-any-return]
 
     # Try wrapping a World instance
     if hasattr(module, "world"):
@@ -229,6 +233,45 @@ def create_parser() -> argparse.ArgumentParser:
         help="Don't serve frontend static files",
     )
     replay_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging",
+    )
+
+    # observe command
+    observe_parser = subparsers.add_parser(
+        "observe",
+        help="Observe a remote agentecs-viz server",
+    )
+    observe_parser.add_argument(
+        "url",
+        metavar="URL",
+        help="Remote server URL (e.g., host:port, ws://host:port/ws)",
+    )
+    observe_parser.add_argument(
+        "-p",
+        "--port",
+        type=int,
+        default=8001,
+        help="Local server port (default: 8001)",
+    )
+    observe_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Local server host (default: 127.0.0.1)",
+    )
+    observe_parser.add_argument(
+        "--no-frontend",
+        action="store_true",
+        help="Don't serve frontend static files",
+    )
+    observe_parser.add_argument(
+        "--record-to",
+        metavar="FILE",
+        help="Record observed trace to file",
+    )
+    observe_parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -512,6 +555,74 @@ def cmd_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_observe(args: argparse.Namespace) -> int:
+    """Run the observe command."""
+    import uvicorn
+    from fastapi.staticfiles import StaticFiles
+
+    from agentecs_viz.server import create_app
+    from agentecs_viz.sources.remote import RemoteWorldSource, normalize_url
+
+    # Configure logging
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    # Normalize URL
+    remote_url = normalize_url(args.url)
+
+    # Create remote source
+    source: WorldStateSource = RemoteWorldSource(remote_url)
+    logger.info(f"Observing remote server: {remote_url}")
+
+    # Wrap with file recording if --record-to specified
+    if args.record_to:
+        from agentecs_viz.history import FileHistoryStore, HistoryCapturingSource
+
+        record_path = Path(args.record_to)
+        file_store = FileHistoryStore(record_path, mode="w")
+        source = HistoryCapturingSource(source, store=file_store)
+        logger.info(f"Recording trace to {record_path}")
+
+    # Create app
+    app = create_app(source, title="AgentECS Observer")
+
+    # Mount frontend static files
+    if not args.no_frontend:
+        try:
+            frontend_dir = get_frontend_dir()
+            app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+            logger.info(f"Serving frontend from {frontend_dir}")
+        except FileNotFoundError as e:
+            logger.warning(f"{e} - Running API only")
+
+    # Print startup message
+    url = f"http://{args.host}:{args.port}"
+    print()
+    print("=" * 50)
+    print("  AgentECS Observer")
+    print("=" * 50)
+    print(f"  Local:     {url}")
+    print(f"  Remote:    {remote_url}")
+    print(f"  API:       {url}/docs")
+    if args.record_to:
+        print(f"  Recording: {args.record_to}")
+    print("=" * 50)
+    print()
+
+    # Run server
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        log_level="debug" if args.verbose else "info",
+    )
+
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     parser = create_parser()
@@ -525,8 +636,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_serve(args)
     elif args.command == "record":
         return cmd_record(args)
-    else:  # args.command == "replay"
+    elif args.command == "replay":
         return cmd_replay(args)
+    else:  # args.command == "observe"
+        return cmd_observe(args)
 
 
 if __name__ == "__main__":

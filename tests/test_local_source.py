@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 import pytest
 from agentecs import World
+
 from agentecs_viz.protocol import TickEvent, WorldStateSource
 from agentecs_viz.sources.local import LocalWorldSource
 

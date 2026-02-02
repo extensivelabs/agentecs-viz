@@ -5,6 +5,7 @@ import contextlib
 
 import pytest
 from agentecs.tracing import TickRecord
+
 from agentecs_viz.history import InMemoryHistoryStore
 from agentecs_viz.protocol import (
     HistoryInfoEvent,

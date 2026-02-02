@@ -1,6 +1,7 @@
 """Tests for MockWorldSource."""
 
 import pytest
+
 from agentecs_viz.protocol import TickEvent, WorldStateSource
 from agentecs_viz.sources.mock import MockWorldSource
 

@@ -2,10 +2,11 @@
 
 from typing import Any
 
-from agentecs_viz.server import create_app
-from agentecs_viz.sources.mock import MockWorldSource
 from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
+
+from agentecs_viz.server import create_app
+from agentecs_viz.sources.mock import MockWorldSource
 
 
 def receive_until_tick(ws: WebSocketTestSession) -> dict[str, Any]:

@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from agentecs_viz.config import VisualizationConfig
     from agentecs_viz.protocol import WorldEvent, WorldStateSource
 
 
@@ -459,7 +460,7 @@ class HistoryCapturingSource:
     @property
     def tick_range(self) -> tuple[int, int] | None:
         """Available tick range from the store."""
-        return self._store.get_tick_range()
+        return self._store.get_tick_range()  # type: ignore[no-any-return]
 
     @property
     def is_connected(self) -> bool:
@@ -470,6 +471,11 @@ class HistoryCapturingSource:
     def is_paused(self) -> bool:
         """Whether playback is paused."""
         return self._paused
+
+    @property
+    def visualization_config(self) -> VisualizationConfig | None:
+        """Visualization config from the underlying source."""
+        return self._source.visualization_config
 
     async def connect(self) -> None:
         """Connect to the underlying source."""

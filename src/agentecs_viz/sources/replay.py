@@ -71,7 +71,7 @@ class ReplayWorldSource(TickLoopSource):
     @property
     def tick_range(self) -> tuple[int, int] | None:
         """Available tick range from the store."""
-        return self._store.get_tick_range()
+        return self._store.get_tick_range()  # type: ignore[no-any-return]
 
     @property
     def current_tick(self) -> int | None:

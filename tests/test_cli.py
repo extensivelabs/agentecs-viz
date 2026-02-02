@@ -1,6 +1,7 @@
 """Tests for the CLI module."""
 
 import pytest
+
 from agentecs_viz.cli import create_parser, get_frontend_dir, load_world_source
 
 

@@ -40,7 +40,7 @@ class EntitySnapshot(BaseModel):
         description="Component snapshots",
     )
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field  # type: ignore[misc]
     @property
     def archetype(self) -> tuple[str, ...]:
         """Sorted component type names defining the archetype."""
@@ -69,7 +69,7 @@ class WorldSnapshot(BaseModel):
         description="Optional world metadata",
     )
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field  # type: ignore[misc]
     @property
     def archetypes(self) -> list[tuple[str, ...]]:
         """Unique archetype signatures from all entities."""
