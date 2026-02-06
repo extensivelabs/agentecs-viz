@@ -10,11 +10,11 @@ repos:
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^\.agents/
+        exclude: ^(\.agents/|\.reference/)
       - id: end-of-file-fixer
-        exclude: ^\.agents/
+        exclude: ^(\.agents/|\.reference/)
       - id: check-yaml
-        exclude: ^\.agents/
+        exclude: ^(\.agents/|\.reference/)
       - id: check-toml
       - id: check-added-large-files
         args: ['--maxkb=1000']
@@ -30,10 +30,10 @@ repos:
       # Run the linter
       - id: ruff
         args: [--fix]
-        exclude: ^(tests/|\.agents/)
+        exclude: ^(tests/|\.agents/|\.reference/)
       # Run the formatter
       - id: ruff-format
-        exclude: ^\.agents/
+        exclude: ^(\.agents/|\.reference/)
 
   # Mypy - Static type checking
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -48,7 +48,7 @@ repos:
           - uvicorn>=0.32.0
           - websockets>=14.0
         args: [--strict, --no-error-summary]
-        exclude: ^(tests/|\.agents/)
+        exclude: ^(tests/|\.agents/|\.reference/)
         files: ^src/
 
   # Security checks
@@ -58,7 +58,7 @@ repos:
       - id: bandit
         args: ['-c', 'pyproject.toml']
         additional_dependencies: ['bandit[toml]']
-        exclude: ^(tests/|\.agents/)
+        exclude: ^(tests/|\.agents/|\.reference/)
 
 ci:
   autofix_commit_msg: |

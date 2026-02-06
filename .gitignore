@@ -30,6 +30,9 @@ frontend/node_modules/
 .agents/
 .archive/
 
+# Reference code (old implementation)
+.reference/
+
 # IDE
 .vscode/
 .idea/

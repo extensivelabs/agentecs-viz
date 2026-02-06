@@ -92,6 +92,7 @@ python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_ignores = false
+disable_error_code = ["import-untyped"]
 
 [[tool.mypy.overrides]]
 module = "uvicorn"
@@ -100,6 +101,16 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "uvicorn.*"
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "agentecs"
+ignore_missing_imports = true
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = "agentecs.*"
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.bandit]
 skips = ["B101", "B311"]
