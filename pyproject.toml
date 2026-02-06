@@ -83,6 +83,14 @@ ignore = ["D100", "D104", "D105", "D107"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["D101", "D102", "D103"]
+# Pydantic models: Field descriptions serve as docs
+"src/agentecs_viz/snapshot.py" = ["D101", "D102"]
+"src/agentecs_viz/protocol.py" = ["D101", "D102"]
+"src/agentecs_viz/server.py" = ["D101"]
+# Source implementations: methods defined by protocol/base class
+"src/agentecs_viz/sources/*.py" = ["D102"]
+# History store: trivial properties
+"src/agentecs_viz/history.py" = ["D102"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
