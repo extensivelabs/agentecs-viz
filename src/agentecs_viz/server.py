@@ -160,7 +160,7 @@ async def _handle_command(
             await websocket.send_json(err.model_dump())
             return
         snapshot = await source.get_snapshot(tick)
-        msg = SnapshotMessage(tick=tick, snapshot=snapshot)
+        msg = SnapshotMessage(tick=snapshot.tick, snapshot=snapshot)
         await websocket.send_json(msg.model_dump())
     elif command in ("pause", "resume", "step"):
         await source.send_command(command)

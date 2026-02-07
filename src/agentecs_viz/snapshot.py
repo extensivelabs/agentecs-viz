@@ -35,7 +35,7 @@ class WorldSnapshot(BaseModel):
     @computed_field  # type: ignore[misc]
     @property
     def archetypes(self) -> list[tuple[str, ...]]:
-        return list({e.archetype for e in self.entities})
+        return sorted({e.archetype for e in self.entities})
 
 
 class ComponentDiff(BaseModel):

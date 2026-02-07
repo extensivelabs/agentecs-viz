@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from abc import abstractmethod
 from collections.abc import AsyncIterator
 from typing import Any
@@ -14,6 +15,8 @@ from agentecs_viz.protocol import (
     SnapshotMessage,
 )
 from agentecs_viz.snapshot import WorldSnapshot
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_EVENT_QUEUE_MAXSIZE = 1000
 
@@ -103,7 +106,10 @@ class TickLoopSource:
 
     async def _emit_event(self, event: SnapshotMessage | MetadataMessage | Any) -> None:
         if self._event_queue:
-            await self._event_queue.put(event)
+            try:
+                self._event_queue.put_nowait(event)
+            except asyncio.QueueFull:
+                logger.warning("Event queue full, dropping event")
 
     async def _on_connect(self) -> None:
         """Hook: called during connect, before starting the loop."""

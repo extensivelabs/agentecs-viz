@@ -159,6 +159,8 @@ class InMemoryHistoryStore:
     def record_tick(self, snapshot: WorldSnapshot) -> None:
         """Record a world snapshot as checkpoint or delta."""
         tick = snapshot.tick
+        if tick in self._checkpoints or tick in self._deltas:
+            return
         is_first = len(self._tick_order) == 0
         is_checkpoint = is_first or (tick % self._checkpoint_interval == 0)
 
