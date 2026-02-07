@@ -15,6 +15,14 @@
   let { tabs, activeTab, onTabChange }: Props = $props();
 
   function handleKeydown(event: KeyboardEvent) {
+    const target = event.target as HTMLElement;
+    if (
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.isContentEditable
+    ) {
+      return;
+    }
     const num = parseInt(event.key);
     if (num >= 1 && num <= tabs.length) {
       const tab = tabs[num - 1];

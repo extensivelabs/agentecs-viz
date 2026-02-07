@@ -21,6 +21,12 @@
     world.chatEnabled ? [...baseTabs, chatTab] : baseTabs,
   );
 
+  $effect(() => {
+    if (!tabs.some((tab) => tab.id === activeTab)) {
+      activeTab = "entities";
+    }
+  });
+
   onMount(() => {
     world.connect();
     return () => world.disconnect();

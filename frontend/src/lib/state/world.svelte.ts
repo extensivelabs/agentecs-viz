@@ -77,6 +77,9 @@ export class WorldState {
           this.tickRange = null;
           this.supportsHistory = false;
           this.entityHashes.clear();
+          this.newEntityIds.clear();
+          this.changedEntityIds.clear();
+          this.selectedEntityId = null;
         }
       },
       onError: (err) => {
@@ -161,7 +164,10 @@ export class WorldState {
         }
         this.isPaused = msg.is_paused;
         if (this.tickRange) {
-          this.tickRange = [this.tickRange[0], Math.max(this.tickRange[1], msg.tick)];
+          this.tickRange = [
+            this.tickRange[0],
+            Math.max(this.tickRange[1], msg.tick),
+          ];
         }
         break;
 

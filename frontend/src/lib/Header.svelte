@@ -29,6 +29,7 @@
         class="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
         onclick={() => world.togglePause()}
         title={world.isPaused ? "Resume" : "Pause"}
+        aria-label={world.isPaused ? "Resume" : "Pause"}
       >
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
           <path d={world.isPaused ? playIcon : pauseIcon} />
@@ -40,6 +41,7 @@
           class="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
           onclick={() => world.step()}
           title="Step"
+          aria-label="Step forward one tick"
         >
           <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
             <path d={stepIcon} />

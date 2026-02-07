@@ -9,7 +9,7 @@
   };
 
   let lastTimestamp = $derived(
-    world.snapshot?.timestamp
+    world.snapshot?.timestamp != null
       ? new Date(world.snapshot.timestamp * 1000).toLocaleTimeString()
       : null,
   );
