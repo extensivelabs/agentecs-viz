@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from agentecs_viz.protocol import (
+    ErrorMessage,
     MetadataMessage,
     SnapshotMessage,
     WorldStateSource,
@@ -94,7 +94,7 @@ def create_app(
 
         snapshot = await source.get_snapshot()
         snapshot_msg = SnapshotMessage(
-            tick=source.get_current_tick(),
+            tick=snapshot.tick,
             snapshot=snapshot,
         )
         await websocket.send_json(snapshot_msg.model_dump())
@@ -135,7 +135,7 @@ def create_app(
             )
             for task in pending:
                 task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
+                with suppress(asyncio.CancelledError):
                     await task
         except Exception as e:
             logger.error(f"WebSocket error: {e}")
@@ -153,7 +153,12 @@ async def _handle_command(
     command = data.get("command", "")
 
     if command == "seek":
-        tick = int(data.get("tick", 0))
+        try:
+            tick = int(data.get("tick", 0))
+        except (ValueError, TypeError):
+            err = ErrorMessage(tick=source.get_current_tick(), message="Invalid tick value")
+            await websocket.send_json(err.model_dump())
+            return
         snapshot = await source.get_snapshot(tick)
         msg = SnapshotMessage(tick=tick, snapshot=snapshot)
         await websocket.send_json(msg.model_dump())

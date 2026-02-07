@@ -120,11 +120,14 @@ def cmd_serve(args: argparse.Namespace) -> int:
         except (ImportError, AttributeError) as e:
             logger.error(str(e))
             return 1
-    else:
+    elif args.mock:
         from agentecs_viz.sources.mock import MockWorldSource
 
         source = MockWorldSource(entity_count=10, tick_interval=0.5)
         logger.info("Using MockWorldSource (demo mode)")
+    else:
+        logger.error("No world source specified. Use --world-module or --mock.")
+        return 1
 
     app = create_app(source)
 

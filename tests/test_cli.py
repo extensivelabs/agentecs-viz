@@ -61,3 +61,7 @@ class TestMain:
     def test_no_args_returns_0(self):
         result = main([])
         assert result == 0
+
+    def test_serve_no_source_returns_1(self):
+        result = main(["serve", "--no-frontend"])
+        assert result == 1

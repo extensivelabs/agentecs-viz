@@ -7,7 +7,7 @@ from agentecs_viz.sources.mock import MockWorldSource
 
 @pytest.fixture
 def source() -> MockWorldSource:
-    return MockWorldSource(entity_count=5, tick_interval=0.5)
+    return MockWorldSource(entity_count=5, tick_interval=10.0)
 
 
 @pytest.fixture
@@ -48,43 +48,38 @@ class TestRESTEndpoints:
 
 
 class TestWebSocket:
-    async def test_connect_receives_metadata_and_snapshot(self, app, source: MockWorldSource):
-        await source.connect()
-        try:
-            transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as _:
-                from starlette.testclient import TestClient
+    def test_connect_receives_metadata_and_snapshot(self, app):
+        from starlette.testclient import TestClient
 
-                with TestClient(app) as tc, tc.websocket_connect("/ws") as ws:
-                    # First message should be metadata
-                    msg1 = ws.receive_json()
-                    assert msg1["type"] == "metadata"
+        with TestClient(app) as tc, tc.websocket_connect("/ws") as ws:
+            # First message should be metadata
+            msg1 = ws.receive_json()
+            assert msg1["type"] == "metadata"
 
-                    # Second message should be snapshot
-                    msg2 = ws.receive_json()
-                    assert msg2["type"] == "snapshot"
-        finally:
-            await source.disconnect()
+            # Second message should be snapshot
+            msg2 = ws.receive_json()
+            assert msg2["type"] == "snapshot"
 
-    async def test_seek_command(self, app, source: MockWorldSource):
-        await source.connect()
-        try:
-            # Advance a few ticks
+    def test_seek_command(self, source):
+        import asyncio
+
+        from starlette.testclient import TestClient
+
+        async def setup():
+            await source.connect()
             await source.send_command("pause")
             for _ in range(5):
                 await source.send_command("step")
-
-            from starlette.testclient import TestClient
-
-            with TestClient(app) as tc, tc.websocket_connect("/ws") as ws:
-                # Consume metadata + initial snapshot
-                ws.receive_json()
-                ws.receive_json()
-
-                # Send seek command
-                ws.send_json({"command": "seek", "tick": 1})
-                resp = ws.receive_json()
-                assert resp["type"] == "snapshot"
-                assert resp["tick"] == 1
-        finally:
             await source.disconnect()
+
+        asyncio.run(setup())
+
+        app = create_app(source)
+        with TestClient(app) as tc, tc.websocket_connect("/ws") as ws:
+            ws.receive_json()  # metadata
+            ws.receive_json()  # initial snapshot
+
+            ws.send_json({"command": "seek", "tick": 1})
+            resp = ws.receive_json()
+            assert resp["type"] == "snapshot"
+            assert resp["tick"] == 1
