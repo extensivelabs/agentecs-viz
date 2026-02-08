@@ -11,7 +11,7 @@ export function numberToHex(n: number): string {
 }
 
 export function getArchetypeColor(archetype: readonly string[]): number {
-  const key = getArchetypeKey(archetype as string[]);
+  const key = getArchetypeKey(archetype);
 
   const cfg = world.archetypeConfigMap.get(key);
   if (cfg?.color) {

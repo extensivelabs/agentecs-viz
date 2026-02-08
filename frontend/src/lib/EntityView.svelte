@@ -30,6 +30,7 @@
 
   // Entity graphics cache
   let entityGraphics = new Map<number, Graphics>();
+  let entityHitRadii = new Map<number, number>();
   let entityLabels = new Map<number, Text>();
   let lastLayoutTick = -1;
   let lastFocusMode: FocusMode | null = null;
@@ -40,6 +41,7 @@
   let tooltipX: number = $state(0);
   let tooltipY: number = $state(0);
   let tooltipVisible: boolean = $state(false);
+  let hoveredEntityId: number | null = null;
 
   // Archetype legend
   let archetypeCounts: { key: string; display: string; color: string; count: number }[] = $derived.by(() => {
@@ -132,10 +134,12 @@
           tooltipX = global.x + 12;
           tooltipY = global.y - 8;
           tooltipVisible = true;
+          hoveredEntityId = entityId;
         });
 
         gfx.on("pointerout", () => {
           tooltipVisible = false;
+          hoveredEntityId = null;
         });
 
         viewport.addChild(gfx);
@@ -157,7 +161,11 @@
       }
 
       gfx.position.set(pos.x, pos.y);
-      gfx.hitArea = { contains: (x: number, y: number) => x * x + y * y <= radius * radius };
+      if (entityHitRadii.get(entity.id) !== radius) {
+        const r2 = radius * radius;
+        gfx.hitArea = { contains: (x: number, y: number) => x * x + y * y <= r2 };
+        entityHitRadii.set(entity.id, radius);
+      }
 
       // Labels
       if (showLabels) {
@@ -186,8 +194,13 @@
     // Remove stale graphics
     for (const [id, gfx] of entityGraphics) {
       if (!activeIds.has(id)) {
+        if (hoveredEntityId === id) {
+          tooltipVisible = false;
+          hoveredEntityId = null;
+        }
         gfx.destroy();
         entityGraphics.delete(id);
+        entityHitRadii.delete(id);
         const label = entityLabels.get(id);
         if (label) {
           label.destroy();
@@ -274,6 +287,7 @@
       window.removeEventListener("keydown", onKeyDown);
       resizeObserver.disconnect();
       entityGraphics.clear();
+      entityHitRadii.clear();
       entityLabels.clear();
       if (app && !initFailed) {
         try { app.destroy(true); } catch { /* renderer may not exist */ }

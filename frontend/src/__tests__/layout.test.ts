@@ -1,15 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
-
-// Mock world state (needed by colors.ts which layout.ts imports)
-vi.mock("../lib/state/world.svelte", () => {
-  return {
-    world: {
-      archetypeConfigMap: new Map(),
-      config: null,
-    },
-  };
-});
-
+import { describe, it, expect } from "vitest";
 import { archetypeLayout, componentLayout, computeLayout } from "../lib/layout";
 import { WORLD_SIZE } from "../lib/rendering";
 import type { EntitySnapshot } from "../lib/types";

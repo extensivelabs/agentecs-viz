@@ -8,11 +8,11 @@ export function hashString(str: string): number {
   return hash >>> 0;
 }
 
-export function getArchetypeKey(archetype: string[]): string {
+export function getArchetypeKey(archetype: readonly string[]): string {
   return [...archetype].sort().join(",");
 }
 
-export function getArchetypeDisplay(archetype: string[]): string {
+export function getArchetypeDisplay(archetype: readonly string[]): string {
   return [...archetype].sort().join(", ");
 }
 
