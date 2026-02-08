@@ -1,6 +1,5 @@
 import type { EntitySnapshot } from "./types";
-import { getArchetypeKey } from "./utils";
-import { hashString } from "./colors";
+import { getArchetypeKey, hashString } from "./utils";
 import { WORLD_SIZE } from "./rendering";
 
 export type FocusMode = "archetypes" | "components";
@@ -120,7 +119,7 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
     for (const comp of archetype) {
       const h = hashString(comp);
       cx += (h % 1000) / 1000;
-      cy += ((h >> 10) % 1000) / 1000;
+      cy += ((h >>> 10) % 1000) / 1000;
     }
     if (archetype.length > 0) {
       cx /= archetype.length;

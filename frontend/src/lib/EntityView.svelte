@@ -115,7 +115,6 @@
         gfx.cursor = "pointer";
 
         const entityId = entity.id;
-        const archDisplay = getArchetypeDisplay(entity.archetype);
 
         gfx.on("pointertap", () => {
           if (world.selectedEntityId === entityId) {
@@ -126,6 +125,8 @@
         });
 
         gfx.on("pointerover", (e) => {
+          const ent = world.entities.find((en) => en.id === entityId);
+          const archDisplay = ent ? getArchetypeDisplay(ent.archetype) : "";
           tooltipText = `Entity ${entityId}\n${archDisplay}`;
           const global = e.global;
           tooltipX = global.x + 12;
@@ -346,8 +347,8 @@
   {#if tooltipVisible}
     <div
       class="pointer-events-none absolute z-50 whitespace-pre rounded bg-bg-secondary px-2 py-1 text-xs text-text-primary shadow-lg"
-      style:left="{tooltipX}px"
-      style:top="{tooltipY}px"
+      style:left={tooltipX + "px"}
+      style:top={tooltipY + "px"}
     >
       {tooltipText}
     </div>

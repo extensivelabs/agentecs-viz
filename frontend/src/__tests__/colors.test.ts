@@ -9,7 +9,8 @@ vi.mock("../lib/state/world.svelte", () => {
   return { world: state };
 });
 
-import { hexToNumber, numberToHex, hashString, getArchetypeColor, getArchetypeColorCSS } from "../lib/colors";
+import { hexToNumber, numberToHex, getArchetypeColor, getArchetypeColorCSS } from "../lib/colors";
+import { hashString } from "../lib/utils";
 import { world } from "../lib/state/world.svelte";
 import { DEFAULT_COLOR_PALETTE } from "../lib/config";
 

@@ -1,5 +1,5 @@
 import { DEFAULT_COLOR_PALETTE } from "./config";
-import { getArchetypeKey } from "./utils";
+import { getArchetypeKey, hashString } from "./utils";
 import { world } from "./state/world.svelte";
 
 export function hexToNumber(hex: string): number {
@@ -8,14 +8,6 @@ export function hexToNumber(hex: string): number {
 
 export function numberToHex(n: number): string {
   return "#" + (n & 0xffffff).toString(16).padStart(6, "0");
-}
-
-export function hashString(str: string): number {
-  let hash = 5381;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash);
 }
 
 export function getArchetypeColor(archetype: readonly string[]): number {
