@@ -107,9 +107,8 @@ def create_app(
                         await _handle_command(source, websocket, data)
                     except Exception as e:
                         logger.exception("WebSocket command failed")
-                        await websocket.send_json(
-                            {"type": "error", "tick": source.get_current_tick(), "message": str(e)}
-                        )
+                        err = ErrorMessage(tick=source.get_current_tick(), message=str(e))
+                        await websocket.send_json(err.model_dump())
             except WebSocketDisconnect:
                 pass
 
