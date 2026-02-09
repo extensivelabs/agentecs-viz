@@ -1,10 +1,18 @@
 import type { EntitySnapshot } from "./types";
 
-export function getArchetypeKey(archetype: string[]): string {
+export function hashString(str: string): number {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
+  }
+  return hash >>> 0;
+}
+
+export function getArchetypeKey(archetype: readonly string[]): string {
   return [...archetype].sort().join(",");
 }
 
-export function getArchetypeDisplay(archetype: string[]): string {
+export function getArchetypeDisplay(archetype: readonly string[]): string {
   return [...archetype].sort().join(", ");
 }
 

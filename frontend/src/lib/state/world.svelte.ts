@@ -1,5 +1,6 @@
 import { WS_URL } from "../config";
 import type {
+  ArchetypeConfig,
   ConnectionState,
   EntitySnapshot,
   ServerMessage,
@@ -63,6 +64,14 @@ export class WorldState {
 
   worldName: string = $derived(this.config?.world_name ?? "AgentECS");
   chatEnabled: boolean = $derived(this.config?.chat_enabled ?? false);
+
+  archetypeConfigMap: Map<string, ArchetypeConfig> = $derived.by(() => {
+    const map = new Map<string, ArchetypeConfig>();
+    for (const cfg of this.config?.archetypes ?? []) {
+      map.set(cfg.key, cfg);
+    }
+    return map;
+  });
 
   connect(url?: string): void {
     if (this.client) this.disconnect();

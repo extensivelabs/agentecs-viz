@@ -93,11 +93,14 @@ describe("App", () => {
       expect(screen.getByText("Test")).toBeTruthy();
     });
 
-    expect(screen.getByRole("tablist")).toBeTruthy();
-    expect(screen.getByText("Entities")).toBeTruthy();
-    expect(screen.getByText("Traces")).toBeTruthy();
-    expect(screen.getByText("Timeline")).toBeTruthy();
-    expect(screen.getByText("Archetypes")).toBeTruthy();
+    const tablist = screen.getByRole("tablist");
+    expect(tablist).toBeTruthy();
+    const tabs = screen.getAllByRole("tab");
+    const tabLabels = tabs.map((t) => t.textContent?.trim().replace(/\s+\d+$/, ""));
+    expect(tabLabels).toContain("Entities");
+    expect(tabLabels).toContain("Traces");
+    expect(tabLabels).toContain("Timeline");
+    expect(tabLabels).toContain("Archetypes");
   });
 
   it("shows error state when connection fails", async () => {
