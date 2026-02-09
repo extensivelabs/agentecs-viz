@@ -12,12 +12,12 @@
 
   let collapsed = $state<Record<string, boolean>>({});
 
-  function isCollapsed(key: string): boolean {
-    return collapsed[key] ?? depth > 0;
+  function isCollapsed(key: string, nestedDefault = false): boolean {
+    return collapsed[key] ?? (nestedDefault || depth > 0);
   }
 
-  function toggle(key: string): void {
-    collapsed[key] = !isCollapsed(key);
+  function toggle(key: string, nestedDefault = false): void {
+    collapsed[key] = !isCollapsed(key, nestedDefault);
   }
 
   function sortedKeys(obj: Record<string, unknown>): string[] {
@@ -83,16 +83,16 @@
                 {#if isObject(item)}
                   <button
                     class="flex items-center gap-1 text-left text-text-secondary hover:text-text-primary"
-                    onclick={() => toggle(`${key}.${i}`)}
+                    onclick={() => toggle(`${key}.${i}`, true)}
                     data-testid="json-toggle"
                   >
-                    <span class="inline-block w-3 text-center text-text-muted">{isCollapsed(`${key}.${i}`) ? "\u25B8" : "\u25BE"}</span>
+                    <span class="inline-block w-3 text-center text-text-muted">{isCollapsed(`${key}.${i}`, true) ? "\u25B8" : "\u25BE"}</span>
                     <span class="text-text-muted">{i}</span>
-                    {#if isCollapsed(`${key}.${i}`)}
+                    {#if isCollapsed(`${key}.${i}`, true)}
                       <span class="text-text-muted">{"{...}"} {objectKeyCount(item)} {objectKeyCount(item) === 1 ? "key" : "keys"}</span>
                     {/if}
                   </button>
-                  {#if !isCollapsed(`${key}.${i}`)}
+                  {#if !isCollapsed(`${key}.${i}`, true)}
                     <JsonTree data={item} {statusFields} {errorFields} depth={depth + 1} />
                   {/if}
                 {:else}
@@ -129,8 +129,10 @@
             <span class="text-accent">{value}</span>
           {:else if typeof value === "boolean"}
             <span class="text-purple-400">{value}</span>
-          {:else if value === null || value === undefined}
+          {:else if value === null}
             <span class="italic text-text-muted">null</span>
+          {:else if value === undefined}
+            <span class="italic text-text-muted">undefined</span>
           {:else}
             <span class="text-text-secondary">{JSON.stringify(value)}</span>
           {/if}
