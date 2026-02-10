@@ -69,7 +69,7 @@ export function archetypeLayout(entities: EntitySnapshot[]): Map<number, EntityP
   const sortedKeys = [...unpositioned.keys()].sort();
   const groupCount = sortedKeys.length;
   const orbitRadius = WORLD_SIZE * 0.3;
-  const spacing = 12;
+  const spacing = 20;
 
   for (let i = 0; i < groupCount; i++) {
     const key = sortedKeys[i];
@@ -132,7 +132,7 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
   }
 
   // Place entities in spiral around their group centroid
-  const spacing = 12;
+  const spacing = 20;
   for (const [key, group] of groups) {
     const centroid = groupCentroids.get(key)!;
     for (let j = 0; j < group.length; j++) {
