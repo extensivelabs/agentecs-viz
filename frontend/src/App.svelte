@@ -103,9 +103,7 @@
           <div class="min-w-0 flex-1">
             <EntityView />
           </div>
-          {#if world.selectedEntity}
-            <InspectorPanel />
-          {/if}
+          <InspectorPanel />
         </div>
       {:else if activeTab === "traces"}
         <div class="flex h-full items-center justify-center text-text-muted text-sm">
