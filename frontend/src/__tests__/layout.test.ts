@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { archetypeLayout, componentLayout, computeLayout } from "../lib/layout";
-import { WORLD_SIZE } from "../lib/rendering";
+import { LAYOUT_SPACING, WORLD_SIZE } from "../lib/rendering";
 import type { EntitySnapshot } from "../lib/types";
 
 function makeEntity(id: number, archetype: string[], components?: { type_name: string; type_short: string; data: Record<string, unknown> }[]): EntitySnapshot {
@@ -84,6 +84,18 @@ describe("archetypeLayout", () => {
       expect(pos.y).toBeLessThanOrEqual(WORLD_SIZE);
     }
   });
+
+  it("separates entities by at least LAYOUT_SPACING", () => {
+    const entities = Array.from({ length: 10 }, (_, i) => makeEntity(i, ["Agent"]));
+    const layout = archetypeLayout(entities);
+    const positions = [...layout.values()];
+    for (let i = 0; i < positions.length; i++) {
+      for (let j = i + 1; j < positions.length; j++) {
+        const dist = Math.hypot(positions[i].x - positions[j].x, positions[i].y - positions[j].y);
+        expect(dist).toBeGreaterThanOrEqual(LAYOUT_SPACING - 1e-9);
+      }
+    }
+  });
 });
 
 describe("componentLayout", () => {
@@ -98,6 +110,18 @@ describe("componentLayout", () => {
     ];
     const layout = componentLayout(entities);
     expect(layout.size).toBe(2);
+  });
+
+  it("separates same-group entities by at least LAYOUT_SPACING", () => {
+    const entities = Array.from({ length: 10 }, (_, i) => makeEntity(i, ["Agent"]));
+    const layout = componentLayout(entities);
+    const positions = [...layout.values()];
+    for (let i = 0; i < positions.length; i++) {
+      for (let j = i + 1; j < positions.length; j++) {
+        const dist = Math.hypot(positions[i].x - positions[j].x, positions[i].y - positions[j].y);
+        expect(dist).toBeGreaterThanOrEqual(LAYOUT_SPACING - 1e-9);
+      }
+    }
   });
 });
 

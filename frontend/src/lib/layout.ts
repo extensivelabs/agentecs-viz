@@ -1,6 +1,6 @@
 import type { EntitySnapshot } from "./types";
 import { getArchetypeKey, hashString } from "./utils";
-import { WORLD_SIZE } from "./rendering";
+import { LAYOUT_SPACING, WORLD_SIZE } from "./rendering";
 
 export type FocusMode = "archetypes" | "components";
 
@@ -69,7 +69,6 @@ export function archetypeLayout(entities: EntitySnapshot[]): Map<number, EntityP
   const sortedKeys = [...unpositioned.keys()].sort();
   const groupCount = sortedKeys.length;
   const orbitRadius = WORLD_SIZE * 0.3;
-  const spacing = 12;
 
   for (let i = 0; i < groupCount; i++) {
     const key = sortedKeys[i];
@@ -79,7 +78,7 @@ export function archetypeLayout(entities: EntitySnapshot[]): Map<number, EntityP
     const cy = center + Math.sin(angle) * orbitRadius;
 
     for (let j = 0; j < group.length; j++) {
-      const pos = spiralPosition(j, cx, cy, spacing);
+      const pos = spiralPosition(j, cx, cy, LAYOUT_SPACING);
       positions.set(group[j].id, {
         x: clampToWorld(pos.x),
         y: clampToWorld(pos.y),
@@ -132,11 +131,10 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
   }
 
   // Place entities in spiral around their group centroid
-  const spacing = 12;
   for (const [key, group] of groups) {
     const centroid = groupCentroids.get(key)!;
     for (let j = 0; j < group.length; j++) {
-      const pos = spiralPosition(j, centroid.x, centroid.y, spacing);
+      const pos = spiralPosition(j, centroid.x, centroid.y, LAYOUT_SPACING);
       positions.set(group[j].id, {
         x: clampToWorld(pos.x),
         y: clampToWorld(pos.y),

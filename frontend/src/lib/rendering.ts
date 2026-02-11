@@ -15,6 +15,8 @@ export const OVERVIEW_DOT_RADIUS = 3;
 
 export const MIN_HIT_RADIUS = 12;
 
+export const LAYOUT_SPACING = 2 * DETAIL_MAX_RADIUS;
+
 export const DETAIL_OVERVIEW_THRESHOLD = 15;
 export const LABEL_ZOOM_THRESHOLD = 1.5;
 
