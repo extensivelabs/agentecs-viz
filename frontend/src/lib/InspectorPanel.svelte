@@ -71,7 +71,7 @@
         {sortedComponents.length} {sortedComponents.length === 1 ? "component" : "components"}
       </div>
 
-      {#each sortedComponents as comp}
+      {#each sortedComponents as comp (entity.id + ':' + comp.type_short)}
         <div class="border-b border-bg-tertiary" data-testid="component-section">
           <button
             class="flex w-full items-center gap-2 px-4 py-2 text-left text-xs hover:bg-bg-tertiary/50"

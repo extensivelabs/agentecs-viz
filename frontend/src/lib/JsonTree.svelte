@@ -46,7 +46,7 @@
 </script>
 
 <div class="font-mono text-xs" data-testid="json-tree">
-  {#each sortedKeys(data) as key}
+  {#each sortedKeys(data) as key (key)}
     {@const value = data[key]}
     <div class="py-0.5" style:padding-left={depth > 0 ? "12px" : "0"}>
       {#if isObject(value)}
