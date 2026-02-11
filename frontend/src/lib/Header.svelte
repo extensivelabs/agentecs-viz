@@ -7,6 +7,41 @@
     "M6 19h4V5H6v14zm8-14v14h4V5h-4z";
   const stepIcon =
     "M6 18l8.5-6L6 6v12zm2 0h3v-12h-3v12z";
+
+  let tickInputValue: string = $state("");
+  let isEditingTick = $state(false);
+
+  function startEditTick() {
+    tickInputValue = String(world.tick);
+    isEditingTick = true;
+  }
+
+  function commitTick() {
+    const n = parseInt(tickInputValue, 10);
+    if (!isNaN(n)) {
+      world.seek(n);
+    }
+    isEditingTick = false;
+  }
+
+  function cancelTick() {
+    isEditingTick = false;
+  }
+
+  function handleTickKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitTick();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelTick();
+    }
+  }
+
+  function autofocus(el: HTMLInputElement) {
+    el.focus();
+    el.select();
+  }
 </script>
 
 <header
@@ -19,7 +54,23 @@
 
   {#if world.isConnected}
     <div class="flex items-center gap-3 text-xs text-text-secondary">
-      <span>Tick <span class="font-mono text-text-primary">{world.tick}</span></span>
+      <span class="flex items-center gap-1">Tick
+        {#if isEditingTick}
+          <input
+            type="text"
+            class="w-14 bg-transparent font-mono text-text-primary outline-none border-b border-accent"
+            bind:value={tickInputValue}
+            onkeydown={handleTickKeydown}
+            onblur={cancelTick}
+            use:autofocus
+          />
+        {:else}
+          <button
+            class="font-mono text-text-primary hover:text-accent cursor-text"
+            onclick={startEditTick}
+          >{world.tick}</button>
+        {/if}
+      </span>
       <span class="text-text-muted">|</span>
       <span><span class="font-mono text-text-primary">{world.entityCount}</span> entities</span>
     </div>
