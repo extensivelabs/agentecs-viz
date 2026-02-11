@@ -14,6 +14,7 @@ from agentecs_viz.protocol import (
     ErrorMessage,
     MetadataMessage,
     SnapshotMessage,
+    TickUpdateMessage,
     WorldStateSource,
 )
 
@@ -164,6 +165,13 @@ async def _handle_command(
         await websocket.send_json(msg.model_dump())
     elif command in ("pause", "resume", "step"):
         await source.send_command(command)
+        snapshot = await source.get_snapshot()
+        ack = TickUpdateMessage(
+            tick=snapshot.tick,
+            entity_count=snapshot.entity_count,
+            is_paused=getattr(source, "is_paused", False),
+        )
+        await websocket.send_json(ack.model_dump())
     elif command == "set_speed":
         tps = data.get("ticks_per_second", 1.0)
         await source.send_command(command, ticks_per_second=tps)

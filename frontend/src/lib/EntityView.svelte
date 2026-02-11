@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Application, Graphics, Text, TextStyle } from "pixi.js";
+  import { Application, Circle, Graphics, Text, TextStyle } from "pixi.js";
   import { Viewport } from "pixi-viewport";
   import { world } from "./state/world.svelte";
   import { getArchetypeColor, getArchetypeColorCSS } from "./colors";
@@ -15,6 +15,7 @@
     OVERVIEW_DOT_RADIUS,
     SELECTION_RING_COLOR,
     CHANGED_RING_COLOR,
+    MIN_HIT_RADIUS,
     entityRadius,
   } from "./rendering";
 
@@ -161,10 +162,10 @@
       }
 
       gfx.position.set(pos.x, pos.y);
-      if (entityHitRadii.get(entity.id) !== radius) {
-        const r2 = radius * radius;
-        gfx.hitArea = { contains: (x: number, y: number) => x * x + y * y <= r2 };
-        entityHitRadii.set(entity.id, radius);
+      const hitRadius = Math.max(radius, MIN_HIT_RADIUS);
+      if (entityHitRadii.get(entity.id) !== hitRadius) {
+        gfx.hitArea = new Circle(0, 0, hitRadius);
+        entityHitRadii.set(entity.id, hitRadius);
       }
 
       // Labels

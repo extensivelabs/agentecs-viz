@@ -5,6 +5,7 @@
   import StatusBar from "./lib/StatusBar.svelte";
   import { world } from "./lib/state/world.svelte";
   import EntityView from "./lib/EntityView.svelte";
+  import InspectorPanel from "./lib/InspectorPanel.svelte";
   import type { Tab } from "./lib/TabBar.svelte";
 
   const baseTabs: Tab[] = [
@@ -98,7 +99,12 @@
 
     <main class="flex-1 overflow-hidden">
       {#if activeTab === "entities"}
-        <EntityView />
+        <div class="flex h-full">
+          <div class="min-w-0 flex-1">
+            <EntityView />
+          </div>
+          <InspectorPanel />
+        </div>
       {:else if activeTab === "traces"}
         <div class="flex h-full items-center justify-center text-text-muted text-sm">
           Trace View (REQ-009)
