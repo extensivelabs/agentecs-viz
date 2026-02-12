@@ -1,15 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { archetypeLayout, componentLayout, computeLayout } from "../lib/layout";
 import { layoutSpacing, adaptiveMaxRadius, entityRadius, DETAIL_MAX_RADIUS, DETAIL_MID_RADIUS, DETAIL_MIN_RADIUS, WORLD_SIZE } from "../lib/rendering";
-import type { EntitySnapshot } from "../lib/types";
-
-function makeEntity(id: number, archetype: string[], components?: { type_name: string; type_short: string; data: Record<string, unknown> }[]): EntitySnapshot {
-  return {
-    id,
-    archetype,
-    components: (components ?? archetype.map((a) => ({ type_name: `mod.${a}`, type_short: a, data: {} }))),
-  };
-}
+import { makeEntity } from "./helpers";
 
 describe("archetypeLayout", () => {
   it("returns empty map for empty input", () => {
@@ -61,8 +53,8 @@ describe("archetypeLayout", () => {
   it("uses Position component when available", () => {
     const entities = [
       makeEntity(1, ["Position", "Health"], [
-        { type_name: "mod.Position", type_short: "Position", data: { x: 10, y: 20 } },
-        { type_name: "mod.Health", type_short: "Health", data: { hp: 100 } },
+        { type_short: "Position", data: { x: 10, y: 20 } },
+        { type_short: "Health", data: { hp: 100 } },
       ]),
     ];
     const layout = archetypeLayout(entities);

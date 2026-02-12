@@ -133,7 +133,13 @@ Runtime-checkable Protocol in `protocol.py`. All data sources implement:
 - Frontend: Vitest with happy-dom
 - Run: `task test` (Python), `npm test` in frontend/ (frontend)
 - Server tests use httpx ASGITransport + starlette TestClient for WebSocket
-- No conftest.py -- fixtures are per-test-file
+
+### Shared Test Helpers
+- **Frontend**: `frontend/src/__tests__/helpers.ts` -- `MockWebSocket`, `makeEntity()`, `makeSnapshot()`, `makeConfig()`, `setWorldState()`
+- **Backend**: `tests/helpers.py` -- `make_entity()`, `make_snapshot()`
+- `pyproject.toml` includes `"tests"` in `pythonpath` so `from helpers import ...` works directly
+- `makeEntity()` accepts either `string[]` archetype names (auto-generates components) or `ComponentInput[]` objects with data
+- `setWorldState()` sets both `world.snapshot` and `world.config` for inspector/component tests
 
 ---
 
