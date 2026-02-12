@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from agentecs_viz._version import __version__
 from agentecs_viz.protocol import (
     ErrorMessage,
     MetadataMessage,
@@ -41,7 +42,7 @@ def create_app(
     source: WorldStateSource,
     *,
     title: str = "AgentECS Visualizer",
-    version: str = "0.1.0",
+    version: str = __version__,
 ) -> FastAPI:
     """Create FastAPI app with REST + WebSocket endpoints for world state streaming."""
 

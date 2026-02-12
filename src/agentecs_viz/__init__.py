@@ -1,5 +1,6 @@
 """AgentECS Visualization Server."""
 
+from agentecs_viz._version import __version__
 from agentecs_viz.config import VisualizationConfig
 from agentecs_viz.history import InMemoryHistoryStore
 from agentecs_viz.protocol import WorldStateSource
@@ -12,6 +13,7 @@ from agentecs_viz.snapshot import (
 )
 
 __all__ = [
+    "__version__",
     "WorldStateSource",
     "WorldSnapshot",
     "EntitySnapshot",
