@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { archetypeLayout, componentLayout, computeLayout } from "../lib/layout";
-import { layoutSpacing, adaptiveMaxRadius, entityRadius, DETAIL_MAX_RADIUS, DETAIL_MIN_RADIUS, WORLD_SIZE } from "../lib/rendering";
+import { layoutSpacing, adaptiveMaxRadius, entityRadius, DETAIL_MAX_RADIUS, DETAIL_MID_RADIUS, DETAIL_MIN_RADIUS, WORLD_SIZE } from "../lib/rendering";
 import type { EntitySnapshot } from "../lib/types";
 
 function makeEntity(id: number, archetype: string[], components?: { type_name: string; type_short: string; data: Record<string, unknown> }[]): EntitySnapshot {
@@ -153,7 +153,7 @@ describe("adaptiveMaxRadius", () => {
   it("scales down for medium counts", () => {
     const r = adaptiveMaxRadius(65);
     expect(r).toBeLessThan(DETAIL_MAX_RADIUS);
-    expect(r).toBeGreaterThan(12);
+    expect(r).toBeGreaterThan(DETAIL_MID_RADIUS);
   });
 
   it("returns DETAIL_MIN_RADIUS for large counts", () => {
@@ -164,8 +164,8 @@ describe("adaptiveMaxRadius", () => {
 
 describe("entityRadius with maxRadius", () => {
   it("respects custom maxRadius", () => {
-    const r = entityRadius(10, 12);
-    expect(r).toBeLessThanOrEqual(12);
+    const r = entityRadius(10, DETAIL_MID_RADIUS);
+    expect(r).toBeLessThanOrEqual(DETAIL_MID_RADIUS);
   });
 });
 

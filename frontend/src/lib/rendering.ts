@@ -42,6 +42,7 @@ export function layoutSpacing(entityCount: number): number {
 }
 
 export function entityRadius(componentCount: number, maxRadius: number = DETAIL_MAX_RADIUS): number {
+  const cap = Math.max(maxRadius, DETAIL_MIN_RADIUS);
   const r = DETAIL_BASE_RADIUS + componentCount * DETAIL_PER_COMPONENT;
-  return Math.max(DETAIL_MIN_RADIUS, Math.min(maxRadius, r));
+  return Math.max(DETAIL_MIN_RADIUS, Math.min(cap, r));
 }
