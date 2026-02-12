@@ -2,38 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/svelte";
 import App from "../App.svelte";
 import { world } from "../lib/state/world.svelte";
-
-// Mock WebSocket
-class MockWebSocket {
-  static instances: MockWebSocket[] = [];
-  readyState = 0;
-  onopen: ((ev: Event) => void) | null = null;
-  onclose: ((ev: CloseEvent) => void) | null = null;
-  onmessage: ((ev: MessageEvent) => void) | null = null;
-  onerror: ((ev: Event) => void) | null = null;
-
-  constructor(_url: string) {
-    MockWebSocket.instances.push(this);
-  }
-
-  send(): void {}
-
-  close(): void {
-    this.readyState = 3;
-    this.onclose?.(new CloseEvent("close"));
-  }
-
-  simulateOpen(): void {
-    this.readyState = 1;
-    this.onopen?.(new Event("open"));
-  }
-
-  simulateMessage(data: unknown): void {
-    this.onmessage?.(
-      new MessageEvent("message", { data: JSON.stringify(data) }),
-    );
-  }
-}
+import { MockWebSocket } from "./helpers";
 
 describe("App", () => {
   beforeEach(() => {

@@ -2,60 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, fireEvent } from "@testing-library/svelte";
 import InspectorPanel from "../lib/InspectorPanel.svelte";
 import { world } from "../lib/state/world.svelte";
-import type { EntitySnapshot, VisualizationConfig, WorldSnapshot } from "../lib/types";
-
-// Mock WebSocket
-class MockWebSocket {
-  static instances: MockWebSocket[] = [];
-  readyState = 0;
-  onopen: ((ev: Event) => void) | null = null;
-  onclose: ((ev: CloseEvent) => void) | null = null;
-  onmessage: ((ev: MessageEvent) => void) | null = null;
-  onerror: ((ev: Event) => void) | null = null;
-
-  constructor(_url: string) {
-    MockWebSocket.instances.push(this);
-  }
-
-  send(): void {}
-  close(): void {
-    this.readyState = 3;
-  }
-}
-
-function makeEntity(id: number, components: { type_short: string; data: Record<string, unknown> }[]): EntitySnapshot {
-  return {
-    id,
-    archetype: components.map((c) => c.type_short),
-    components: components.map((c) => ({
-      type_name: `module.${c.type_short}`,
-      type_short: c.type_short,
-      data: c.data,
-    })),
-  };
-}
-
-function setWorldState(entities: EntitySnapshot[], config?: Partial<VisualizationConfig>): void {
-  const snapshot: WorldSnapshot = {
-    tick: 1,
-    timestamp: Date.now() / 1000,
-    entity_count: entities.length,
-    entities,
-    archetypes: [],
-    metadata: {},
-  };
-  world.snapshot = snapshot as WorldSnapshot;
-  world.config = {
-    world_name: "Test",
-    archetypes: [],
-    component_metrics: [],
-    field_hints: { status_fields: [], error_fields: [] },
-    chat_enabled: false,
-    entity_label_template: null,
-    color_palette: null,
-    ...config,
-  } as VisualizationConfig;
-}
+import { MockWebSocket, makeEntity, setWorldState } from "./helpers";
 
 describe("InspectorPanel", () => {
   beforeEach(() => {

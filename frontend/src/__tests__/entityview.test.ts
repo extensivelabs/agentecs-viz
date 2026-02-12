@@ -2,25 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render } from "@testing-library/svelte";
 import EntityView from "../lib/EntityView.svelte";
 import { world } from "../lib/state/world.svelte";
-
-// Mock WebSocket
-class MockWebSocket {
-  static instances: MockWebSocket[] = [];
-  readyState = 0;
-  onopen: ((ev: Event) => void) | null = null;
-  onclose: ((ev: CloseEvent) => void) | null = null;
-  onmessage: ((ev: MessageEvent) => void) | null = null;
-  onerror: ((ev: Event) => void) | null = null;
-
-  constructor(_url: string) {
-    MockWebSocket.instances.push(this);
-  }
-
-  send(): void {}
-  close(): void {
-    this.readyState = 3;
-  }
-}
+import { MockWebSocket } from "./helpers";
 
 describe("EntityView", () => {
   beforeEach(() => {
