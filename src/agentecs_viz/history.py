@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+from collections import deque
+from collections.abc import Sequence
 from typing import Any
 
 from agentecs_viz.snapshot import (
@@ -141,7 +143,7 @@ class InMemoryHistoryStore:
         self._checkpoint_interval = checkpoint_interval
         self._checkpoints: dict[int, WorldSnapshot] = {}
         self._deltas: dict[int, TickDelta] = {}
-        self._tick_order: list[int] = []
+        self._tick_order: deque[int] = deque()
         self._last_snapshot: WorldSnapshot | None = None
 
     @property
@@ -155,6 +157,11 @@ class InMemoryHistoryStore:
     @property
     def checkpoint_interval(self) -> int:
         return self._checkpoint_interval
+
+    @property
+    def stored_ticks(self) -> Sequence[int]:
+        """Ordered sequence of stored tick numbers."""
+        return self._tick_order
 
     def record_tick(self, snapshot: WorldSnapshot) -> None:
         """Record a world snapshot as checkpoint or delta."""
@@ -181,7 +188,7 @@ class InMemoryHistoryStore:
         if not self._tick_order:
             return
 
-        old_tick = self._tick_order.pop(0)
+        old_tick = self._tick_order.popleft()
         was_checkpoint = old_tick in self._checkpoints
 
         if was_checkpoint:
@@ -240,14 +247,13 @@ def compute_entity_lifecycles(
     store: InMemoryHistoryStore,
 ) -> list[dict[str, Any]]:
     """Compute entity spawn/despawn ticks from stored history."""
-    tick_range = store.get_tick_range()
-    if not tick_range:
+    if not store.stored_ticks:
         return []
 
     lifecycles: dict[int, dict[str, Any]] = {}
     previous_ids: set[int] = set()
 
-    for tick in range(tick_range[0], tick_range[1] + 1):
+    for tick in store.stored_ticks:
         snapshot = store.get_snapshot(tick)
         if not snapshot:
             continue
