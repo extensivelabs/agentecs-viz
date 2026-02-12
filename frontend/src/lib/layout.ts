@@ -1,6 +1,6 @@
 import type { EntitySnapshot } from "./types";
-import { getArchetypeKey, hashString } from "./utils";
-import { LAYOUT_SPACING, WORLD_SIZE } from "./rendering";
+import { getArchetypeKey } from "./utils";
+import { layoutSpacing, WORLD_SIZE } from "./rendering";
 
 export type FocusMode = "archetypes" | "components";
 
@@ -40,6 +40,7 @@ export function archetypeLayout(entities: EntitySnapshot[]): Map<number, EntityP
   const positions = new Map<number, EntityPosition>();
   if (entities.length === 0) return positions;
 
+  const spacing = layoutSpacing(entities.length);
   const center = WORLD_SIZE / 2;
   const scale = WORLD_SIZE / 200;
 
@@ -78,7 +79,7 @@ export function archetypeLayout(entities: EntitySnapshot[]): Map<number, EntityP
     const cy = center + Math.sin(angle) * orbitRadius;
 
     for (let j = 0; j < group.length; j++) {
-      const pos = spiralPosition(j, cx, cy, LAYOUT_SPACING);
+      const pos = spiralPosition(j, cx, cy, spacing);
       positions.set(group[j].id, {
         x: clampToWorld(pos.x),
         y: clampToWorld(pos.y),
@@ -93,6 +94,7 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
   const positions = new Map<number, EntityPosition>();
   if (entities.length === 0) return positions;
 
+  const spacing = layoutSpacing(entities.length);
   const center = WORLD_SIZE / 2;
 
   // Group entities by archetype
@@ -107,34 +109,50 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
     group.push(entity);
   }
 
-  // For each group, compute centroid based on component name hashes
-  const gridSize = WORLD_SIZE * 0.6;
-  const groupCentroids = new Map<string, { x: number; y: number }>();
+  // Collect all unique component names and assign anchor points on a circle
+  const allComponents = new Set<string>();
+  for (const entity of entities) {
+    for (const comp of entity.archetype) {
+      allComponents.add(comp);
+    }
+  }
+  const sortedComponents = [...allComponents].sort();
+  const anchorRadius = WORLD_SIZE * 0.3;
+  const componentAnchors = new Map<string, { x: number; y: number }>();
+  for (let i = 0; i < sortedComponents.length; i++) {
+    const angle = (2 * Math.PI * i) / sortedComponents.length;
+    componentAnchors.set(sortedComponents[i], {
+      x: center + Math.cos(angle) * anchorRadius,
+      y: center + Math.sin(angle) * anchorRadius,
+    });
+  }
 
+  // Each archetype's centroid = average of its components' anchor positions
+  const groupCentroids = new Map<string, { x: number; y: number }>();
   for (const [key, group] of groups) {
     const archetype = group[0].archetype;
     let cx = 0;
     let cy = 0;
     for (const comp of archetype) {
-      const h = hashString(comp);
-      cx += (h % 1000) / 1000;
-      cy += ((h >>> 10) % 1000) / 1000;
+      const anchor = componentAnchors.get(comp)!;
+      cx += anchor.x;
+      cy += anchor.y;
     }
     if (archetype.length > 0) {
       cx /= archetype.length;
       cy /= archetype.length;
+    } else {
+      cx = center;
+      cy = center;
     }
-    groupCentroids.set(key, {
-      x: center - gridSize / 2 + cx * gridSize,
-      y: center - gridSize / 2 + cy * gridSize,
-    });
+    groupCentroids.set(key, { x: cx, y: cy });
   }
 
   // Place entities in spiral around their group centroid
   for (const [key, group] of groups) {
     const centroid = groupCentroids.get(key)!;
     for (let j = 0; j < group.length; j++) {
-      const pos = spiralPosition(j, centroid.x, centroid.y, LAYOUT_SPACING);
+      const pos = spiralPosition(j, centroid.x, centroid.y, spacing);
       positions.set(group[j].id, {
         x: clampToWorld(pos.x),
         y: clampToWorld(pos.y),

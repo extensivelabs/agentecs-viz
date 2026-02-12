@@ -17,6 +17,8 @@
     CHANGED_RING_COLOR,
     MIN_HIT_RADIUS,
     entityRadius,
+    adaptiveMaxRadius,
+    VIEWPORT_FIT_PADDING,
   } from "./rendering";
 
   type ViewLevel = "detail" | "overview" | "auto";
@@ -70,6 +72,30 @@
       }));
   });
 
+  let initialFitDone = false;
+
+  function fitToEntities() {
+    if (!viewport) return;
+    const layout = cachedLayout;
+    if (layout.size === 0) {
+      viewport.fitWorld(true);
+      return;
+    }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const pos of layout.values()) {
+      if (pos.x < minX) minX = pos.x;
+      if (pos.y < minY) minY = pos.y;
+      if (pos.x > maxX) maxX = pos.x;
+      if (pos.y > maxY) maxY = pos.y;
+    }
+    const bw = maxX - minX + VIEWPORT_FIT_PADDING * 2;
+    const bh = maxY - minY + VIEWPORT_FIT_PADDING * 2;
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    viewport.fit(true, bw, bh);
+    viewport.moveCenter(cx, cy);
+  }
+
   function updateViewLevel() {
     if (!viewport) return;
     if (viewLevelOverride !== "auto") {
@@ -98,6 +124,7 @@
     const isDetail = currentViewLevel === "detail";
     const selectedId = world.selectedEntityId;
     const showLabels = isDetail && viewport.scaled >= LABEL_ZOOM_THRESHOLD;
+    const maxR = adaptiveMaxRadius(entities.length);
 
     // Track which entity IDs are still present
     const activeIds = new Set<number>();
@@ -108,7 +135,7 @@
       if (!pos) continue;
 
       const color = getArchetypeColor(entity.archetype);
-      const radius = isDetail ? entityRadius(entity.components.length) : OVERVIEW_DOT_RADIUS;
+      const radius = isDetail ? entityRadius(entity.components.length, maxR) : OVERVIEW_DOT_RADIUS;
 
       // Get or create graphics
       let gfx = entityGraphics.get(entity.id);
@@ -257,7 +284,7 @@
 
       app.stage.addChild(viewport);
 
-      // Fit world in view initially
+      // Initial fit — will be refined once entities arrive
       viewport.fitWorld(true);
 
       // Listen for zoom changes
@@ -309,6 +336,12 @@
     void viewport;
 
     renderEntities();
+
+    if (!initialFitDone && cachedLayout.size > 0 && viewport) {
+      initialFitDone = true;
+      fitToEntities();
+      updateViewLevel();
+    }
   });
 </script>
 
@@ -357,6 +390,28 @@
       {/each}
     </div>
   {/if}
+
+  <!-- Zoom controls -->
+  <div class="absolute bottom-3 right-3 flex flex-col gap-1">
+    <button
+      class="flex h-7 w-7 items-center justify-center rounded bg-bg-secondary/90 text-sm text-text-secondary hover:text-text-primary"
+      onclick={() => viewport?.zoomPercent(0.5, true)}
+      title="Zoom in"
+      aria-label="Zoom in"
+    >+</button>
+    <button
+      class="flex h-7 w-7 items-center justify-center rounded bg-bg-secondary/90 text-sm text-text-secondary hover:text-text-primary"
+      onclick={() => viewport?.zoomPercent(-0.33, true)}
+      title="Zoom out"
+      aria-label="Zoom out"
+    >&minus;</button>
+    <button
+      class="flex h-7 w-7 items-center justify-center rounded bg-bg-secondary/90 text-sm text-text-secondary hover:text-text-primary"
+      onclick={() => { fitToEntities(); updateViewLevel(); }}
+      title="Reset view"
+      aria-label="Reset view"
+    >&#8962;</button>
+  </div>
 
   <!-- Tooltip -->
   {#if tooltipVisible}
