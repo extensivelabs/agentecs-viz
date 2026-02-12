@@ -202,13 +202,13 @@ class TestInMemoryHistoryStore:
             store.record_tick(_snapshot(i, [_entity(1, A={"v": i})]))
         assert list(store.stored_ticks) == [0, 1, 2, 3, 4]
 
-    def test_eviction_uses_deque_popleft(self):
-        """Eviction at scale should be O(1) via deque.popleft, not list.pop(0)."""
+    def test_eviction_retains_latest_ticks(self):
+        """After exceeding max_ticks, store retains only the most recent ticks."""
         store = InMemoryHistoryStore(max_ticks=100, checkpoint_interval=50)
         for i in range(200):
             store.record_tick(_snapshot(i, [_entity(1, A={"v": i})]))
         assert store.tick_count == 100
-        assert list(store.stored_ticks)[0] == 100
+        assert store.stored_ticks[0] == 100
 
 
 class TestComputeEntityLifecycles:

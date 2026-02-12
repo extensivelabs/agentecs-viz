@@ -161,7 +161,7 @@ class InMemoryHistoryStore:
     @property
     def stored_ticks(self) -> Sequence[int]:
         """Ordered sequence of stored tick numbers."""
-        return self._tick_order
+        return tuple(self._tick_order)
 
     def record_tick(self, snapshot: WorldSnapshot) -> None:
         """Record a world snapshot as checkpoint or delta."""
