@@ -60,6 +60,18 @@ class TestWebSocket:
             msg2 = ws.receive_json()
             assert msg2["type"] == "snapshot"
 
+    def test_metadata_contains_protocol_properties(self, app):
+        from starlette.testclient import TestClient
+
+        with TestClient(app) as tc, tc.websocket_connect("/ws") as ws:
+            msg = ws.receive_json()
+            assert msg["type"] == "metadata"
+            assert "is_paused" in msg
+            assert "supports_history" in msg
+            assert "tick_range" in msg
+            assert msg["supports_history"] is True
+            assert msg["is_paused"] is False
+
     def test_seek_command(self, source):
         import asyncio
 

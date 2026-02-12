@@ -99,6 +99,14 @@ class MockWorldSource(TickLoopSource):
     def history(self) -> InMemoryHistoryStore:
         return self._history
 
+    @property
+    def supports_history(self) -> bool:
+        return True
+
+    @property
+    def tick_range(self) -> tuple[int, int] | None:
+        return self._history.get_tick_range()
+
     async def _on_connect(self) -> None:
         self._entities = self._generate_entities()
         snapshot = self._build_snapshot()
@@ -128,7 +136,7 @@ class MockWorldSource(TickLoopSource):
                 await self._execute_tick()
         elif command == "set_speed":
             tps = kwargs.get("ticks_per_second", 1.0)
-            if isinstance(tps, int | float) and tps > 0:
+            if isinstance(tps, int | float) and not isinstance(tps, bool) and tps > 0:
                 self._tick_interval = 1.0 / tps
 
     async def _execute_tick(self) -> None:

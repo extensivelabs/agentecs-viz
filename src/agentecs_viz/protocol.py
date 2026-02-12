@@ -89,8 +89,10 @@ class MetadataMessage(BaseModel):
     is_paused: bool = False
 
 
+AnyServerEvent = SnapshotMessage | DeltaMessage | ErrorMessage | TickUpdateMessage | MetadataMessage
+
 ServerMessage = Annotated[
-    SnapshotMessage | DeltaMessage | ErrorMessage | TickUpdateMessage | MetadataMessage,
+    AnyServerEvent,
     Field(discriminator="type"),
 ]
 
@@ -119,11 +121,7 @@ class WorldStateSource(Protocol):
     def get_current_tick(self) -> int: ...
 
     @abstractmethod
-    def subscribe(
-        self,
-    ) -> AsyncIterator[
-        SnapshotMessage | DeltaMessage | ErrorMessage | TickUpdateMessage | MetadataMessage
-    ]: ...
+    def subscribe(self) -> AsyncIterator[AnyServerEvent]: ...
 
     @abstractmethod
     async def send_command(self, command: str, **kwargs: Any) -> None: ...
@@ -131,6 +129,18 @@ class WorldStateSource(Protocol):
     @property
     @abstractmethod
     def is_connected(self) -> bool: ...
+
+    @property
+    def is_paused(self) -> bool:
+        return False
+
+    @property
+    def supports_history(self) -> bool:
+        return False
+
+    @property
+    def tick_range(self) -> tuple[int, int] | None:
+        return None
 
     @property
     def visualization_config(self) -> VisualizationConfig | None:
