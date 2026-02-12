@@ -76,7 +76,7 @@ export function makeEntity(
       id,
       archetype: comps.map((c) => c.type_short),
       components: comps.map((c) => ({
-        type_name: `module.${c.type_short}`,
+        type_name: `mod.${c.type_short}`,
         type_short: c.type_short,
         data: c.data,
       })),
