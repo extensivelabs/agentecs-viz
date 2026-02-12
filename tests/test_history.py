@@ -196,6 +196,20 @@ class TestInMemoryHistoryStore:
         assert store.max_ticks == 500
         assert store.checkpoint_interval == 50
 
+    def test_stored_ticks(self):
+        store = InMemoryHistoryStore(max_ticks=100, checkpoint_interval=10)
+        for i in range(5):
+            store.record_tick(_snapshot(i, [_entity(1, A={"v": i})]))
+        assert list(store.stored_ticks) == [0, 1, 2, 3, 4]
+
+    def test_eviction_retains_latest_ticks(self):
+        """After exceeding max_ticks, store retains only the most recent ticks."""
+        store = InMemoryHistoryStore(max_ticks=100, checkpoint_interval=50)
+        for i in range(200):
+            store.record_tick(_snapshot(i, [_entity(1, A={"v": i})]))
+        assert store.tick_count == 100
+        assert store.stored_ticks[0] == 100
+
 
 class TestComputeEntityLifecycles:
     def test_basic_lifecycles(self):
@@ -213,6 +227,22 @@ class TestComputeEntityLifecycles:
         assert by_id[2]["despawn_tick"] == 2
         assert by_id[3]["spawn_tick"] == 1
         assert by_id[3]["despawn_tick"] is None
+
+    def test_non_sequential_ticks(self):
+        """Lifecycle computation iterates stored ticks, not integer range."""
+        store = InMemoryHistoryStore(max_ticks=100, checkpoint_interval=100)
+        # Record ticks with gaps: 0, 10, 20
+        store.record_tick(_snapshot(0, [_entity(1, A={})]))
+        store.record_tick(_snapshot(10, [_entity(1, A={}), _entity(2, B={})]))
+        store.record_tick(_snapshot(20, [_entity(2, B={})]))
+
+        lifecycles = compute_entity_lifecycles(store)
+        by_id = {lc["entity_id"]: lc for lc in lifecycles}
+
+        assert by_id[1]["spawn_tick"] == 0
+        assert by_id[1]["despawn_tick"] == 20
+        assert by_id[2]["spawn_tick"] == 10
+        assert by_id[2]["despawn_tick"] is None
 
     def test_empty_store(self):
         store = InMemoryHistoryStore()
