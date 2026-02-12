@@ -15,6 +15,10 @@ export const OVERVIEW_DOT_RADIUS = 3;
 
 export const MIN_HIT_RADIUS = 12;
 
+export const DETAIL_MID_RADIUS = 12;
+
+export const VIEWPORT_FIT_PADDING = 100;
+
 export const DETAIL_OVERVIEW_THRESHOLD = 15;
 export const LABEL_ZOOM_THRESHOLD = 1.5;
 
@@ -28,8 +32,8 @@ function lerp(a: number, b: number, t: number): number {
 
 export function adaptiveMaxRadius(entityCount: number): number {
   if (entityCount <= 30) return DETAIL_MAX_RADIUS;
-  if (entityCount <= 100) return lerp(DETAIL_MAX_RADIUS, 12, (entityCount - 30) / 70);
-  if (entityCount <= 500) return lerp(12, DETAIL_MIN_RADIUS, (entityCount - 100) / 400);
+  if (entityCount <= 100) return lerp(DETAIL_MAX_RADIUS, DETAIL_MID_RADIUS, (entityCount - 30) / 70);
+  if (entityCount <= 500) return lerp(DETAIL_MID_RADIUS, DETAIL_MIN_RADIUS, (entityCount - 100) / 400);
   return DETAIL_MIN_RADIUS;
 }
 

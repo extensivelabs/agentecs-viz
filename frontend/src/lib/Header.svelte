@@ -17,9 +17,12 @@
   }
 
   function commitTick() {
-    const n = parseInt(tickInputValue, 10);
-    if (!isNaN(n)) {
-      world.seek(n);
+    const n = Number(tickInputValue.trim());
+    if (Number.isInteger(n) && Number.isFinite(n)) {
+      const clamped = world.tickRange
+        ? Math.min(world.tickRange[1], Math.max(world.tickRange[0], n))
+        : n;
+      world.seek(clamped);
     }
     isEditingTick = false;
   }

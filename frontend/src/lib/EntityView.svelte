@@ -18,6 +18,7 @@
     MIN_HIT_RADIUS,
     entityRadius,
     adaptiveMaxRadius,
+    VIEWPORT_FIT_PADDING,
   } from "./rendering";
 
   type ViewLevel = "detail" | "overview" | "auto";
@@ -87,9 +88,8 @@
       if (pos.x > maxX) maxX = pos.x;
       if (pos.y > maxY) maxY = pos.y;
     }
-    const padding = 100;
-    const bw = maxX - minX + padding * 2;
-    const bh = maxY - minY + padding * 2;
+    const bw = maxX - minX + VIEWPORT_FIT_PADDING * 2;
+    const bh = maxY - minY + VIEWPORT_FIT_PADDING * 2;
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     viewport.fit(true, bw, bh);

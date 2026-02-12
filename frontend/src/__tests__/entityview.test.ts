@@ -58,4 +58,13 @@ describe("EntityView", () => {
     const select = container.querySelector("select");
     expect(select).toBeTruthy();
   });
+
+  it("renders zoom control buttons", () => {
+    const { container } = render(EntityView);
+    const buttons = container.querySelectorAll("button");
+    const labels = [...buttons].map((b) => b.getAttribute("aria-label"));
+    expect(labels).toContain("Zoom in");
+    expect(labels).toContain("Zoom out");
+    expect(labels).toContain("Reset view");
+  });
 });
