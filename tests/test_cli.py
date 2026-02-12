@@ -35,12 +35,16 @@ class TestCreateParser:
         args = parser.parse_args([])
         assert args.command is None
 
-    def test_version(self):
-        parser = create_parser()
+    def test_version(self, capsys):
         import pytest
 
-        with pytest.raises(SystemExit):
+        from agentecs_viz._version import __version__
+
+        parser = create_parser()
+        with pytest.raises(SystemExit, match="0"):
             parser.parse_args(["--version"])
+        captured = capsys.readouterr()
+        assert __version__ in captured.out
 
 
 class TestGetFrontendDir:
