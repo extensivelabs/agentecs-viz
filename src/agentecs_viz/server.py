@@ -79,17 +79,12 @@ def create_app(
         await websocket.accept()
         logger.info("WebSocket client connected")
 
-        config = source.visualization_config
-        history_store = getattr(source, "_history", None) or getattr(source, "history", None)
-        tick_range = history_store.get_tick_range() if history_store else None
-        supports_history = history_store is not None
-
         meta_msg = MetadataMessage(
             tick=source.get_current_tick(),
-            config=config,
-            tick_range=tick_range,
-            supports_history=supports_history,
-            is_paused=getattr(source, "is_paused", False),
+            config=source.visualization_config,
+            tick_range=source.tick_range,
+            supports_history=source.supports_history,
+            is_paused=source.is_paused,
         )
         await websocket.send_json(meta_msg.model_dump())
 
@@ -117,12 +112,7 @@ def create_app(
         async def send_events() -> None:
             try:
                 async for event in source.subscribe():
-                    msg: dict[str, Any]
-                    if isinstance(event, BaseModel):
-                        msg = event.model_dump()
-                    else:
-                        msg = {"type": "unknown", "data": str(event)}
-                    await websocket.send_json(msg)
+                    await websocket.send_json(event.model_dump())
             except WebSocketDisconnect:
                 pass
 
@@ -139,7 +129,7 @@ def create_app(
                 with suppress(asyncio.CancelledError):
                     await task
         except Exception as e:
-            logger.error(f"WebSocket error: {e}")
+            logger.error("WebSocket error: %s", e)
         finally:
             logger.info("WebSocket client disconnected")
 
@@ -169,7 +159,7 @@ async def _handle_command(
         ack = TickUpdateMessage(
             tick=snapshot.tick,
             entity_count=snapshot.entity_count,
-            is_paused=getattr(source, "is_paused", False),
+            is_paused=source.is_paused,
         )
         await websocket.send_json(ack.model_dump())
     elif command == "set_speed":

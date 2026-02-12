@@ -104,3 +104,33 @@ class TestMockWorldSource:
             assert tick_range is not None
         finally:
             await source.disconnect()
+
+    async def test_supports_history(self, source: MockWorldSource):
+        assert source.supports_history is True
+
+    async def test_tick_range_populated(self, source: MockWorldSource):
+        await source.connect()
+        try:
+            await source.send_command("pause")
+            for _ in range(3):
+                await source.send_command("step")
+
+            tick_range = source.tick_range
+            assert tick_range is not None
+            assert tick_range[0] == 0
+            assert tick_range[1] == 3
+        finally:
+            await source.disconnect()
+
+    async def test_tick_range_none_before_connect(self):
+        source = MockWorldSource(entity_count=5)
+        assert source.tick_range is None
+
+    async def test_set_speed_rejects_bool(self, source: MockWorldSource):
+        await source.connect()
+        try:
+            original_interval = source._tick_interval
+            await source.send_command("set_speed", ticks_per_second=True)
+            assert source._tick_interval == original_interval
+        finally:
+            await source.disconnect()

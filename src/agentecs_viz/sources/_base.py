@@ -10,10 +10,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from agentecs_viz.config import VisualizationConfig
-from agentecs_viz.protocol import (
-    MetadataMessage,
-    SnapshotMessage,
-)
+from agentecs_viz.protocol import AnyServerEvent
 from agentecs_viz.snapshot import WorldSnapshot
 
 logger = logging.getLogger(__name__)
@@ -42,7 +39,7 @@ class TickLoopSource:
         self._connected = False
         self._paused = False
         self._stop_event: asyncio.Event | None = None
-        self._event_queue: asyncio.Queue[SnapshotMessage | MetadataMessage | Any] | None = None
+        self._event_queue: asyncio.Queue[AnyServerEvent] | None = None
         self._loop_task: asyncio.Task[None] | None = None
 
     @property
@@ -56,6 +53,14 @@ class TickLoopSource:
     @property
     def is_paused(self) -> bool:
         return self._paused
+
+    @property
+    def supports_history(self) -> bool:
+        return False
+
+    @property
+    def tick_range(self) -> tuple[int, int] | None:
+        return None
 
     async def connect(self) -> None:
         self._connected = True
@@ -74,7 +79,7 @@ class TickLoopSource:
                 await self._loop_task
             self._loop_task = None
 
-    async def subscribe(self) -> AsyncIterator[SnapshotMessage | MetadataMessage | Any]:
+    async def subscribe(self) -> AsyncIterator[AnyServerEvent]:
         if not self._stop_event or not self._event_queue:
             return
             yield  # pragma: no cover - makes this a proper empty async generator
@@ -104,7 +109,7 @@ class TickLoopSource:
             except TimeoutError:
                 continue
 
-    async def _emit_event(self, event: SnapshotMessage | MetadataMessage | Any) -> None:
+    async def _emit_event(self, event: AnyServerEvent) -> None:
         if self._event_queue:
             try:
                 self._event_queue.put_nowait(event)
@@ -114,7 +119,7 @@ class TickLoopSource:
     async def _on_connect(self) -> None:
         """Hook: called during connect, before starting the loop."""
 
-    async def _emit_initial_events(self) -> AsyncIterator[SnapshotMessage | MetadataMessage | Any]:
+    async def _emit_initial_events(self) -> AsyncIterator[AnyServerEvent]:
         """Hook: yield events at start of subscription."""
         return
         yield  # pragma: no cover - makes this a proper empty async generator

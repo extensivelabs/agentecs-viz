@@ -1,4 +1,5 @@
 from agentecs_viz.protocol import (
+    AnyServerEvent,
     DeltaMessage,
     ErrorMessage,
     MetadataMessage,
@@ -92,3 +93,26 @@ class TestWorldStateSourceProtocol:
         assert hasattr(WorldStateSource, "__protocol_attrs__") or callable(
             getattr(WorldStateSource, "_is_protocol", None)
         )
+
+    def test_default_is_paused(self):
+        assert WorldStateSource.is_paused.fget is not None
+        # Verify default returns False (via property descriptor)
+        assert WorldStateSource.is_paused.fget(None) is False  # type: ignore[arg-type]
+
+    def test_default_supports_history(self):
+        assert WorldStateSource.supports_history.fget is not None
+        assert WorldStateSource.supports_history.fget(None) is False  # type: ignore[arg-type]
+
+    def test_default_tick_range(self):
+        assert WorldStateSource.tick_range.fget is not None
+        assert WorldStateSource.tick_range.fget(None) is None  # type: ignore[arg-type]
+
+    def test_default_visualization_config(self):
+        assert WorldStateSource.visualization_config.fget is not None
+        assert WorldStateSource.visualization_config.fget(None) is None  # type: ignore[arg-type]
+
+
+class TestAnyServerEvent:
+    def test_union_contains_all_message_types(self):
+        expected = {SnapshotMessage, DeltaMessage, ErrorMessage, TickUpdateMessage, MetadataMessage}
+        assert set(AnyServerEvent.__args__) == expected
