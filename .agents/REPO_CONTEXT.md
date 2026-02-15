@@ -236,6 +236,11 @@ Runtime-checkable Protocol in `protocol.py`. All data sources implement:
 - These are third-party type declaration conflicts, not our source code
 - Frontend builds fine; these only appear in `svelte-check` output
 
+### Version via importlib.metadata
+- `importlib.metadata.version("agentecs-viz")` reads from installed package metadata (set by `pyproject.toml`)
+- `PackageNotFoundError` fallback to `"0.0.0-dev"` handles editable installs and running from source
+- `_version.py` is the canonical import point; `__init__.py` re-exports `__version__`
+
 ### No task frontend:test or task frontend:check
 - Taskfile only has `task frontend:dev` and `task frontend:build`
 - Run frontend tests directly: `cd frontend && npx vitest run`

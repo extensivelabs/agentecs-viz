@@ -107,123 +107,7 @@ Remove the Archetypes focus mode from Entity View. Archetypes mode is redundant 
 
 ## Code Health & Architecture
 
-### REQ-021: WorldStateSource Protocol Compliance
-- [ ] Completed
-- **Branch:** `feature/req-021-protocol-compliance`
-- **Task List:** `feature/req-021-protocol-compliance`
-- **Started:**
-- **Completed:**
-- **Priority:** P1
-
-Server bypasses the `WorldStateSource` protocol via `getattr` for private attributes. This undermines the protocol abstraction early in development and will compound as more sources are added.
-
-**Scope:**
-
-*Protocol boundary fixes (server.py):*
-- `getattr(source, "_history", None) or getattr(source, "history", None)` at line 83 — reaches into private `_history`
-- `getattr(source, "is_paused", False)` at lines 92 and 173 — not declared on protocol
-- Dead `else` branch at line 124 converting unknown events to `{"type": "unknown"}` — remove
-
-*Protocol extension (protocol.py):*
-- Add `is_paused: bool` property to `WorldStateSource` protocol (or create `PausableSource` protocol)
-- Add `history: InMemoryHistoryStore | None` property if history access is needed, or expose via a method
-- Consider narrowing `subscribe` return type to use the `ServerMessage` type alias
-
-*Backend cleanup:*
-- `logger.error(f"WebSocket error: {e}")` at line 142 — use lazy formatting `logger.error("WebSocket error: %s", e)`
-- `sources/_base.py` lines 77-80, 117-120: document the `return; yield` empty async generator pattern
-- `sources/mock.py` line 131: `isinstance(tps, int | float)` accepts `bool` — add explicit bool guard
-
-**Acceptance Criteria:**
-- Server accesses source capabilities only through declared protocol methods/properties
-- No `getattr` with private attribute names in server.py
-- Dead code removed
-- All existing tests pass
-
 ---
-
-### REQ-022: History Store Performance
-- [ ] Completed
-- **Branch:** `feature/req-022-history-performance`
-- **Task List:** `feature/req-022-history-performance`
-- **Started:**
-- **Completed:**
-- **Priority:** P1
-
-Two performance issues in `history.py` that will degrade with scale.
-
-**Scope:**
-
-*`_evict_oldest` uses `list.pop(0)` (O(n)):*
-- `_tick_order` is a `list` — `pop(0)` shifts all elements on every eviction
-- Replace with `collections.deque` for O(1) popleft
-- At `max_ticks=10_000`, this creates measurable overhead per new tick
-
-*`compute_entity_lifecycles` iterates integer gaps:*
-- Iterates `range(tick_range[0], tick_range[1] + 1)` calling `get_snapshot(tick)` for every integer
-- Ticks are not guaranteed sequential — gaps cause redundant checkpoint-delta reconstruction
-- Iterate `store._tick_order` (or expose an iteration method) instead
-
-**Acceptance Criteria:**
-- `_tick_order` uses `collections.deque`
-- `compute_entity_lifecycles` iterates only stored ticks
-- Existing history tests pass
-- Add benchmark test or documented analysis for eviction at max_ticks=10_000
-
----
-
-### REQ-023: Shared Test Infrastructure
-- [ ] Completed
-- **Branch:** `feature/req-023-test-infrastructure`
-- **Task List:** `feature/req-023-test-infrastructure`
-- **Started:**
-- **Completed:**
-- **Priority:** P1
-
-Test helper code is duplicated across multiple test files. This causes maintenance drift and makes adding new tests harder.
-
-**Scope:**
-
-*Frontend — shared test utilities:*
-- `MockWebSocket` class duplicated in `app.test.ts`, `websocket.test.ts`, `world.test.ts`, `inspector.test.ts`, `entityview.test.ts` with slight variations
-- Extract to `frontend/src/__tests__/helpers.ts` (or similar)
-- `makeEntity()` and `makeSnapshot()` helper functions duplicated in `inspector.test.ts`, `world.test.ts`, `layout.test.ts`, `entityview.test.ts` with different signatures
-- Unify into shared helpers with a consistent interface
-
-*Backend — test cleanup:*
-- `test_history.py` imports `TickDelta` inside 3 individual test methods instead of at module level
-- `_entity()` and `_snapshot()` helpers in `test_history.py` could be shared with other test files via a `conftest.py` or shared module
-
-**Acceptance Criteria:**
-- Single `MockWebSocket` definition used by all frontend tests
-- Single `makeEntity`/`makeSnapshot` definition used by all frontend tests
-- Backend test helpers consolidated
-- All existing tests pass unchanged
-
----
-
-### REQ-024: Version Single Source of Truth
-- [ ] Completed
-- **Branch:** `feature/req-024-version-source`
-- **Task List:** `feature/req-024-version-source`
-- **Started:**
-- **Completed:**
-- **Priority:** P1
-
-Version string "0.1.0" scattered across `pyproject.toml`, `cli.py` (line 59), `server.py` (line 44). Frontend `package.json` has "0.0.0". These will drift.
-
-**Scope:**
-
-- Define version in one place (`pyproject.toml` or `__init__.py`)
-- `cli.py` and `server.py` read from that source at runtime (e.g., `importlib.metadata.version("agentecs-viz")`)
-- `package.json` version aligned or documented as intentionally different
-- Verify version appears correctly in `--version` CLI output and `/api/health` response
-
-**Acceptance Criteria:**
-- Single version definition
-- `cli.py --version` and `/api/health` read from that definition
-- No hard-coded version strings elsewhere
-- All tests pass
 
 ---
 
@@ -836,7 +720,7 @@ Recommended sequence respecting dependencies:
  4. REQ-021  Protocol Compliance       P1  (architecture fix, no deps)
  5. REQ-022  History Performance       P1  (architecture fix, no deps)
  6. REQ-023  Shared Test Infra         P1  (enables faster test writing)
- 7. REQ-024  Version Source of Truth   P1  (quick, no deps)
+ 7. REQ-024  Version Source of Truth   P1  done
  8. REQ-025  EntityView Lifecycle      P1  (fix before building on EntityView)
  ── Phase 1 ──────────────────────────────
  9. REQ-004  Entity View               P1  ✅
