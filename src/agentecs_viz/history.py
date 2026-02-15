@@ -7,6 +7,7 @@ from collections import deque
 from collections.abc import Sequence
 from typing import Any
 
+from agentecs_viz.protocol import ErrorEventMessage
 from agentecs_viz.snapshot import (
     ComponentDiff,
     ComponentSnapshot,
@@ -143,6 +144,7 @@ class InMemoryHistoryStore:
         self._checkpoint_interval = checkpoint_interval
         self._checkpoints: dict[int, WorldSnapshot] = {}
         self._deltas: dict[int, TickDelta] = {}
+        self._errors: dict[int, list[ErrorEventMessage]] = {}
         self._tick_order: deque[int] = deque()
         self._last_snapshot: WorldSnapshot | None = None
 
@@ -183,12 +185,30 @@ class InMemoryHistoryStore:
         while len(self._tick_order) > self._max_ticks:
             self._evict_oldest()
 
+    def record_error(self, error: ErrorEventMessage) -> None:
+        """Record an error event at its tick."""
+        self._errors.setdefault(error.tick, []).append(error)
+
+    def get_errors(self, start_tick: int, end_tick: int) -> list[ErrorEventMessage]:
+        """Return all errors in [start_tick, end_tick] inclusive."""
+        result: list[ErrorEventMessage] = []
+        for tick in range(start_tick, end_tick + 1):
+            result.extend(self._errors.get(tick, []))
+        return result
+
+    def get_errors_for_entity(
+        self, entity_id: int, start_tick: int, end_tick: int
+    ) -> list[ErrorEventMessage]:
+        """Return errors for a specific entity in [start_tick, end_tick] inclusive."""
+        return [e for e in self.get_errors(start_tick, end_tick) if e.entity_id == entity_id]
+
     def _evict_oldest(self) -> None:
         """Evict oldest tick, promoting next tick to checkpoint if needed."""
         if not self._tick_order:
             return
 
         old_tick = self._tick_order.popleft()
+        self._errors.pop(old_tick, None)
         was_checkpoint = old_tick in self._checkpoints
 
         if was_checkpoint:
@@ -239,6 +259,7 @@ class InMemoryHistoryStore:
     def clear(self) -> None:
         self._checkpoints.clear()
         self._deltas.clear()
+        self._errors.clear()
         self._tick_order.clear()
         self._last_snapshot = None
 

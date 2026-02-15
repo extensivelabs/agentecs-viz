@@ -7,6 +7,7 @@
   import { world } from "./lib/state/world.svelte";
   import EntityView from "./lib/EntityView.svelte";
   import InspectorPanel from "./lib/InspectorPanel.svelte";
+  import ErrorPanel from "./lib/ErrorPanel.svelte";
   import type { Tab } from "./lib/TabBar.svelte";
 
   const baseTabs: Tab[] = [
@@ -96,6 +97,7 @@
       </div>
     {/if}
 
+    <ErrorPanel />
     <TabBar {tabs} {activeTab} onTabChange={(id) => (activeTab = id)} />
     <TimelineBar />
 

@@ -4,6 +4,7 @@ import type {
   ArchetypeConfig,
   ConnectionState,
   EntitySnapshot,
+  ErrorEventMessage,
   ServerMessage,
   VisualizationConfig,
   WorldSnapshot,
@@ -26,6 +27,9 @@ export class WorldState {
 
   newEntityIds: Set<number> = $state(new Set());
   changedEntityIds: Set<number> = $state(new Set());
+
+  errors: ErrorEventMessage[] = $state([]);
+  errorPanelOpen: boolean = $state(false);
 
   previousSnapshot: WorldSnapshot | null = $state(null);
   pinnedEntityState: Map<number, EntitySnapshot> | null = $state(null);
@@ -77,6 +81,31 @@ export class WorldState {
     }
     return map;
   });
+
+  visibleErrors: ErrorEventMessage[] = $derived(
+    this.errors.filter((e) => e.tick <= this.tick),
+  );
+
+  currentTickErrors: ErrorEventMessage[] = $derived(
+    this.errors.filter((e) => e.tick === this.tick),
+  );
+
+  errorEntityIds: Set<number> = $derived(
+    new Set(this.currentTickErrors.map((e) => e.entity_id)),
+  );
+
+  pastErrorEntityIds: Set<number> = $derived.by(() => {
+    const past = new Set<number>();
+    const current = this.errorEntityIds;
+    for (const e of this.visibleErrors) {
+      if (!current.has(e.entity_id)) {
+        past.add(e.entity_id);
+      }
+    }
+    return past;
+  });
+
+  visibleErrorCount: number = $derived(this.visibleErrors.length);
 
   selectedEntityDiff: EntityDiff | null = $derived.by(() => {
     if (!this.selectedEntity || !this.previousSnapshot) return null;
@@ -140,6 +169,8 @@ export class WorldState {
           this.newEntityIds.clear();
           this.changedEntityIds.clear();
           this.selectedEntityId = null;
+          this.errors = [];
+          this.errorPanelOpen = false;
         }
       },
       onError: (err) => {
@@ -205,6 +236,15 @@ export class WorldState {
     this.startReplay(speed);
   }
 
+  toggleErrorPanel(): void {
+    this.errorPanelOpen = !this.errorPanelOpen;
+  }
+
+  jumpToError(error: ErrorEventMessage): void {
+    this.seek(error.tick);
+    this.selectEntity(error.entity_id);
+  }
+
   pinCurrentState(): void {
     if (!this.snapshot) return;
     this.pinnedEntityState = new Map(
@@ -254,8 +294,11 @@ export class WorldState {
         this.lastError = msg.message;
         break;
 
+      case "error_event":
+        this.errors = [...this.errors, msg];
+        break;
+
       case "delta":
-        // Delta application deferred to REQ-007
         break;
     }
   }
