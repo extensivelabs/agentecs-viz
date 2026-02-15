@@ -38,7 +38,7 @@ For small backend changes, run targeted tests first, then broader checks.
    - Taskfile expects `uv`; if absent, setup tasks fail.
    - Workaround: use `python -m pip` for dependency installation and run tools directly.
 
-3. **Editable install can fail due unavailable `agentecs` package index entry**
+3. **Editable install can fail due to unavailable `agentecs` package index entry**
    - Error: `No matching distribution found for agentecs>=0.1.0`
    - Workaround used for CI/sandbox validation: install required tooling directly (`pytest`, `fastapi`, `uvicorn`, `httpx`, `ruff`, `mypy`, etc.) and run backend tests with `PYTHONPATH=src python -m pytest`.
 
