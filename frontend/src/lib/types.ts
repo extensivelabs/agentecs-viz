@@ -62,6 +62,16 @@ export interface TickUpdateMessage {
   is_paused: boolean;
 }
 
+export type ErrorSeverity = "critical" | "warning" | "info";
+
+export interface ErrorEventMessage {
+  type: "error_event";
+  tick: number;
+  entity_id: number;
+  message: string;
+  severity: ErrorSeverity;
+}
+
 export interface MetadataMessage {
   type: "metadata";
   tick: number;
@@ -75,6 +85,7 @@ export type ServerMessage =
   | SnapshotMessage
   | DeltaMessage
   | ErrorMessage
+  | ErrorEventMessage
   | TickUpdateMessage
   | MetadataMessage;
 
@@ -132,6 +143,7 @@ const SERVER_MESSAGE_TYPES = new Set([
   "snapshot",
   "delta",
   "error",
+  "error_event",
   "tick_update",
   "metadata",
 ]);

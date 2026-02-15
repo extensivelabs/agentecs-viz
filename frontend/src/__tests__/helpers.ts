@@ -1,5 +1,7 @@
 import type {
   EntitySnapshot,
+  ErrorEventMessage,
+  ErrorSeverity,
   WorldSnapshot,
   VisualizationConfig,
 } from "../lib/types";
@@ -152,6 +154,16 @@ export function makeConfig(
     entity_label_template: null,
     ...overrides,
   };
+}
+
+
+export function makeErrorEvent(
+  tick: number,
+  entity_id: number,
+  message: string = "test error",
+  severity: ErrorSeverity = "warning",
+): ErrorEventMessage {
+  return { type: "error_event", tick, entity_id, message, severity };
 }
 
 

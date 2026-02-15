@@ -7,6 +7,7 @@ from agentecs_viz.history import (
     _diff_entity,
     compute_entity_lifecycles,
 )
+from agentecs_viz.protocol import ErrorEventMessage, ErrorSeverity
 from agentecs_viz.snapshot import ComponentDiff, TickDelta
 
 
@@ -189,6 +190,67 @@ class TestInMemoryHistoryStore:
             store.record_tick(make_snapshot(i, [make_entity(1, A={"v": i})]))
         assert store.tick_count == 100
         assert store.stored_ticks[0] == 100
+
+
+class TestErrorStorage:
+    def _make_error(
+        self, tick: int, entity_id: int, severity: ErrorSeverity = ErrorSeverity.warning
+    ) -> ErrorEventMessage:
+        return ErrorEventMessage(
+            tick=tick, entity_id=entity_id, message=f"error at tick {tick}", severity=severity
+        )
+
+    def test_record_and_retrieve(self):
+        store = InMemoryHistoryStore()
+        store.record_tick(make_snapshot(0, [make_entity(1, A={})]))
+        error = self._make_error(0, 1)
+        store.record_error(error)
+        errors = store.get_errors(0, 0)
+        assert len(errors) == 1
+        assert errors[0].entity_id == 1
+
+    def test_range_query(self):
+        store = InMemoryHistoryStore()
+        for i in range(5):
+            store.record_tick(make_snapshot(i, [make_entity(1, A={})]))
+        store.record_error(self._make_error(1, 1))
+        store.record_error(self._make_error(3, 1))
+        store.record_error(self._make_error(4, 1))
+
+        errors = store.get_errors(0, 2)
+        assert len(errors) == 1
+        errors = store.get_errors(0, 4)
+        assert len(errors) == 3
+
+    def test_entity_filtering(self):
+        store = InMemoryHistoryStore()
+        store.record_tick(make_snapshot(0, [make_entity(1, A={}), make_entity(2, B={})]))
+        store.record_error(self._make_error(0, 1))
+        store.record_error(self._make_error(0, 2))
+
+        errors = store.get_errors_for_entity(1, 0, 0)
+        assert len(errors) == 1
+        assert errors[0].entity_id == 1
+
+    def test_eviction_clears_errors(self):
+        store = InMemoryHistoryStore(max_ticks=3, checkpoint_interval=5)
+        for i in range(5):
+            store.record_tick(make_snapshot(i, [make_entity(1, A={})]))
+            store.record_error(self._make_error(i, 1))
+
+        # Ticks 0 and 1 should be evicted
+        errors = store.get_errors(0, 1)
+        assert len(errors) == 0
+        # Ticks 2-4 should remain
+        errors = store.get_errors(2, 4)
+        assert len(errors) == 3
+
+    def test_clear_removes_errors(self):
+        store = InMemoryHistoryStore()
+        store.record_tick(make_snapshot(0, [make_entity(1, A={})]))
+        store.record_error(self._make_error(0, 1))
+        store.clear()
+        assert store.get_errors(0, 0) == []
 
 
 class TestComputeEntityLifecycles:

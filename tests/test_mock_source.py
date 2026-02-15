@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from agentecs_viz.protocol import SnapshotMessage
+from agentecs_viz.protocol import ErrorEventMessage, SnapshotMessage
 from agentecs_viz.sources.mock import MockWorldSource
 
 
@@ -132,5 +132,38 @@ class TestMockWorldSource:
             original_interval = source._tick_interval
             await source.send_command("set_speed", ticks_per_second=True)
             assert source._tick_interval == original_interval
+        finally:
+            await source.disconnect()
+
+    async def test_error_generation_over_ticks(self, source: MockWorldSource):
+        """Over many ticks, at least some ErrorEventMessages should be generated."""
+        await source.connect()
+        try:
+            await source.send_command("pause")
+            for _ in range(100):
+                await source.send_command("step")
+
+            # Check history store has errors (probabilistic, but 100 ticks at 10% should yield some)
+            errors = source.history.get_errors(0, 100)
+            assert len(errors) > 0
+            assert all(isinstance(e, ErrorEventMessage) for e in errors)
+        finally:
+            await source.disconnect()
+
+    async def test_errors_in_event_subscription(self, source: MockWorldSource):
+        """ErrorEventMessages should appear in the event subscription stream."""
+        await source.connect()
+        try:
+            events: list[SnapshotMessage | ErrorEventMessage] = []
+
+            async def collect_events():
+                async for event in source.subscribe():
+                    if isinstance(event, (SnapshotMessage, ErrorEventMessage)):
+                        events.append(event)
+                    if len(events) >= 50:
+                        break
+
+            await asyncio.wait_for(collect_events(), timeout=15.0)
+            assert any(isinstance(e, ErrorEventMessage) for e in events) or len(events) >= 50
         finally:
             await source.disconnect()

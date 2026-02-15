@@ -4,9 +4,10 @@ import type {
   MetadataMessage,
   SnapshotMessage,
   ErrorMessage,
+  ErrorEventMessage,
   TickUpdateMessage,
 } from "../lib/types";
-import { MockWebSocket, makeSnapshot, makeConfig } from "./helpers";
+import { MockWebSocket, makeSnapshot, makeConfig, makeErrorEvent } from "./helpers";
 
 describe("WorldState", () => {
   let state: WorldState;
@@ -540,6 +541,94 @@ describe("WorldState", () => {
       state.clearPinnedState();
       expect(state.pinnedTick).toBeNull();
       expect(state.pinnedEntityState).toBeNull();
+    });
+  });
+
+  describe("error tracking", () => {
+    beforeEach(() => {
+      state.connect("ws://test/ws");
+      MockWebSocket.instances[0].simulateOpen();
+    });
+
+    it("accumulates error events", () => {
+      const snapshot = makeSnapshot({ tick: 3 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 3,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      MockWebSocket.instances[0].simulateMessage(makeErrorEvent(1, 1, "err1"));
+      MockWebSocket.instances[0].simulateMessage(makeErrorEvent(2, 2, "err2"));
+      MockWebSocket.instances[0].simulateMessage(makeErrorEvent(3, 1, "err3"));
+
+      expect(state.errors).toHaveLength(3);
+    });
+
+    it("visibleErrors filters by current tick", () => {
+      const snapshot = makeSnapshot({ tick: 2 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 2,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      MockWebSocket.instances[0].simulateMessage(makeErrorEvent(1, 1));
+      MockWebSocket.instances[0].simulateMessage(makeErrorEvent(2, 2));
+      MockWebSocket.instances[0].simulateMessage(makeErrorEvent(5, 1));
+
+      expect(state.visibleErrors).toHaveLength(2);
+      expect(state.visibleErrorCount).toBe(2);
+    });
+
+    it("errorEntityIds contains current tick error entities", () => {
+      const snapshot = makeSnapshot({ tick: 3 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 3,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      MockWebSocket.instances[0].simulateMessage(makeErrorEvent(3, 1));
+      MockWebSocket.instances[0].simulateMessage(makeErrorEvent(2, 2));
+
+      expect(state.errorEntityIds.has(1)).toBe(true);
+      expect(state.errorEntityIds.has(2)).toBe(false);
+      expect(state.pastErrorEntityIds.has(2)).toBe(true);
+    });
+
+    it("clears errors on disconnect", () => {
+      MockWebSocket.instances[0].simulateMessage(makeErrorEvent(1, 1));
+      expect(state.errors).toHaveLength(1);
+
+      state.disconnect();
+      expect(state.errors).toHaveLength(0);
+      expect(state.errorPanelOpen).toBe(false);
+    });
+
+    it("jumpToError seeks and selects entity", () => {
+      const ws = MockWebSocket.instances[0];
+      const snapshot = makeSnapshot({ tick: 5 });
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 5,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      const error = makeErrorEvent(3, 42);
+      state.jumpToError(error);
+
+      const lastMsg = JSON.parse(ws.sentMessages[ws.sentMessages.length - 1]);
+      expect(lastMsg).toEqual({ command: "seek", tick: 3 });
+      expect(state.selectedEntityId).toBe(42);
+    });
+
+    it("toggleErrorPanel toggles state", () => {
+      expect(state.errorPanelOpen).toBe(false);
+      state.toggleErrorPanel();
+      expect(state.errorPanelOpen).toBe(true);
+      state.toggleErrorPanel();
+      expect(state.errorPanelOpen).toBe(false);
     });
   });
 });

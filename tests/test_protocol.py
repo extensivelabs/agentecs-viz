@@ -1,7 +1,9 @@
 from agentecs_viz.protocol import (
     AnyServerEvent,
     DeltaMessage,
+    ErrorEventMessage,
     ErrorMessage,
+    ErrorSeverity,
     MetadataMessage,
     PauseCommand,
     ResumeCommand,
@@ -87,6 +89,38 @@ class TestServerMessages:
         assert restored.tick == 1
 
 
+class TestErrorEventMessage:
+    def test_creation(self):
+        msg = ErrorEventMessage(tick=5, entity_id=42, message="something failed")
+        assert msg.type == "error_event"
+        assert msg.tick == 5
+        assert msg.entity_id == 42
+        assert msg.message == "something failed"
+
+    def test_default_severity(self):
+        msg = ErrorEventMessage(tick=1, entity_id=1, message="test")
+        assert msg.severity == ErrorSeverity.warning
+
+    def test_explicit_severity(self):
+        msg = ErrorEventMessage(
+            tick=1, entity_id=1, message="critical issue", severity=ErrorSeverity.critical
+        )
+        assert msg.severity == ErrorSeverity.critical
+
+    def test_roundtrip_serialization(self):
+        msg = ErrorEventMessage(tick=3, entity_id=7, message="timeout", severity=ErrorSeverity.info)
+        data = msg.model_dump()
+        restored = ErrorEventMessage.model_validate(data)
+        assert restored.tick == 3
+        assert restored.entity_id == 7
+        assert restored.severity == ErrorSeverity.info
+
+    def test_severity_enum_values(self):
+        assert ErrorSeverity.critical == "critical"
+        assert ErrorSeverity.warning == "warning"
+        assert ErrorSeverity.info == "info"
+
+
 class TestWorldStateSourceProtocol:
     def test_isinstance_check(self):
         """WorldStateSource is a runtime-checkable Protocol."""
@@ -114,5 +148,12 @@ class TestWorldStateSourceProtocol:
 
 class TestAnyServerEvent:
     def test_union_contains_all_message_types(self):
-        expected = {SnapshotMessage, DeltaMessage, ErrorMessage, TickUpdateMessage, MetadataMessage}
+        expected = {
+            SnapshotMessage,
+            DeltaMessage,
+            ErrorMessage,
+            ErrorEventMessage,
+            TickUpdateMessage,
+            MetadataMessage,
+        }
         assert set(AnyServerEvent.__args__) == expected

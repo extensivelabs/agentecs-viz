@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections.abc import AsyncIterator
+from enum import StrEnum
 from typing import Annotated, Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
@@ -78,6 +79,20 @@ class TickUpdateMessage(BaseModel):
     is_paused: bool
 
 
+class ErrorSeverity(StrEnum):
+    critical = "critical"
+    warning = "warning"
+    info = "info"
+
+
+class ErrorEventMessage(BaseModel):
+    type: Literal["error_event"] = "error_event"
+    tick: int
+    entity_id: int
+    message: str
+    severity: ErrorSeverity = ErrorSeverity.warning
+
+
 class MetadataMessage(BaseModel):
     """Sent on WebSocket connection with initial state and capabilities."""
 
@@ -89,7 +104,14 @@ class MetadataMessage(BaseModel):
     is_paused: bool = False
 
 
-AnyServerEvent = SnapshotMessage | DeltaMessage | ErrorMessage | TickUpdateMessage | MetadataMessage
+AnyServerEvent = (
+    SnapshotMessage
+    | DeltaMessage
+    | ErrorMessage
+    | ErrorEventMessage
+    | TickUpdateMessage
+    | MetadataMessage
+)
 
 ServerMessage = Annotated[
     AnyServerEvent,
