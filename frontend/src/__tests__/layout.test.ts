@@ -60,6 +60,33 @@ describe("componentLayout", () => {
     expect(pos.x).toBeCloseTo(center + 10 * scale, 0);
     expect(pos.y).toBeCloseTo(center + 20 * scale, 0);
   });
+
+  it("spaces unpositioned entities based on their count, not total count", () => {
+    // 20 positioned + 5 unpositioned: spacing should match layoutSpacing(5)
+    const positioned = Array.from({ length: 20 }, (_, i) =>
+      makeEntity(i, ["Position", "Health"], [
+        { type_short: "Position", data: { x: i * 5, y: 0 } },
+        { type_short: "Health", data: { hp: 100 } },
+      ]),
+    );
+    const unpositioned = Array.from({ length: 5 }, (_, i) =>
+      makeEntity(100 + i, ["Agent"]),
+    );
+    const layout = componentLayout([...positioned, ...unpositioned]);
+    expect(layout.size).toBe(25);
+
+    const spacing = layoutSpacing(5);
+    const unpositionedPositions = unpositioned.map((e) => layout.get(e.id)!);
+    for (let i = 0; i < unpositionedPositions.length; i++) {
+      for (let j = i + 1; j < unpositionedPositions.length; j++) {
+        const dist = Math.hypot(
+          unpositionedPositions[i].x - unpositionedPositions[j].x,
+          unpositionedPositions[i].y - unpositionedPositions[j].y,
+        );
+        expect(dist).toBeGreaterThanOrEqual(spacing - 1e-9);
+      }
+    }
+  });
 });
 
 describe("adaptiveMaxRadius", () => {

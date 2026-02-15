@@ -38,7 +38,6 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
   const positions = new Map<number, EntityPosition>();
   if (entities.length === 0) return positions;
 
-  const spacing = layoutSpacing(entities.length);
   const center = WORLD_SIZE / 2;
   const scale = WORLD_SIZE / 200;
 
@@ -57,6 +56,8 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
   }
 
   if (unpositioned.length === 0) return positions;
+
+  const spacing = layoutSpacing(unpositioned.length);
 
   // Group unpositioned entities by archetype
   const groups = new Map<string, EntitySnapshot[]>();
