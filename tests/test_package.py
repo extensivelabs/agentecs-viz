@@ -1,4 +1,5 @@
 import importlib
+import importlib.metadata
 
 import agentecs_viz._version as version_mod
 
