@@ -25,7 +25,7 @@
 
   let containerEl: HTMLDivElement;
   let app: Application | null = null;
-  let viewport: Viewport | null = null;
+  let viewport: Viewport | null = $state(null);
 
   let viewLevelOverride: ViewLevel = $state("auto");
   let focusMode: FocusMode = $state("archetypes");
@@ -38,6 +38,9 @@
   let lastLayoutTick = -1;
   let lastFocusMode: FocusMode | null = null;
   let cachedLayout = new Map<number, { x: number; y: number }>();
+
+  // Entity tooltip cache (built during render for O(1) hover lookup)
+  let entityTooltips = new Map<number, string>();
 
   // Tooltip state
   let tooltipText: string = $state("");
@@ -137,7 +140,6 @@
       const color = getArchetypeColor(entity.archetype);
       const radius = isDetail ? entityRadius(entity.components.length, maxR) : OVERVIEW_DOT_RADIUS;
 
-      // Get or create graphics
       let gfx = entityGraphics.get(entity.id);
       if (!gfx) {
         gfx = new Graphics();
@@ -155,9 +157,7 @@
         });
 
         gfx.on("pointerover", (e) => {
-          const ent = world.entities.find((en) => en.id === entityId);
-          const archDisplay = ent ? getArchetypeDisplay(ent.archetype) : "";
-          tooltipText = `Entity ${entityId}\n${archDisplay}`;
+          tooltipText = entityTooltips.get(entityId) ?? `Entity ${entityId}`;
           const global = e.global;
           tooltipX = global.x + 12;
           tooltipY = global.y - 8;
@@ -174,21 +174,19 @@
         entityGraphics.set(entity.id, gfx);
       }
 
-      // Redraw
       gfx.clear();
       gfx.circle(0, 0, radius).fill({ color });
 
-      // Selection ring
       if (selectedId === entity.id) {
         gfx.circle(0, 0, radius + 3).stroke({ color: SELECTION_RING_COLOR, width: 2 });
       }
 
-      // Changed ring
       if (world.changedEntityIds.has(entity.id)) {
         gfx.circle(0, 0, radius + (selectedId === entity.id ? 6 : 3)).stroke({ color: CHANGED_RING_COLOR, width: 1.5 });
       }
 
       gfx.position.set(pos.x, pos.y);
+      entityTooltips.set(entity.id, `Entity ${entity.id}\n${getArchetypeDisplay(entity.archetype)}`);
       const hitRadius = Math.max(radius, MIN_HIT_RADIUS);
       if (entityHitRadii.get(entity.id) !== hitRadius) {
         gfx.hitArea = new Circle(0, 0, hitRadius);
@@ -229,6 +227,7 @@
         gfx.destroy();
         entityGraphics.delete(id);
         entityHitRadii.delete(id);
+        entityTooltips.delete(id);
         const label = entityLabels.get(id);
         if (label) {
           label.destroy();
@@ -244,6 +243,15 @@
     let initFailed = false;
 
     async function init() {
+      entityGraphics = new Map();
+      entityHitRadii = new Map();
+      entityLabels = new Map();
+      entityTooltips = new Map();
+      cachedLayout = new Map();
+      lastLayoutTick = -1;
+      lastFocusMode = null;
+      initialFitDone = false;
+
       try {
         app = new Application();
         await app.init({
@@ -287,7 +295,6 @@
       // Initial fit — will be refined once entities arrive
       viewport.fitWorld(true);
 
-      // Listen for zoom changes
       viewport.on("zoomed", () => updateViewLevel());
       viewport.on("moved", () => updateViewLevel());
 
@@ -317,6 +324,7 @@
       entityGraphics.clear();
       entityHitRadii.clear();
       entityLabels.clear();
+      entityTooltips.clear();
       if (app && !initFailed) {
         try { app.destroy(true); } catch { /* renderer may not exist */ }
       }
@@ -325,7 +333,6 @@
     };
   });
 
-  // Re-render whenever relevant state changes
   $effect(() => {
     // Read dependencies
     void world.entities;
@@ -333,7 +340,6 @@
     void world.changedEntityIds;
     void currentViewLevel;
     void focusMode;
-    void viewport;
 
     renderEntities();
 
