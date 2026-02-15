@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, fireEvent } from "@testing-library/svelte";
 import InspectorPanel from "../lib/InspectorPanel.svelte";
 import { world } from "../lib/state/world.svelte";
-import { MockWebSocket, makeEntity, setWorldState } from "./helpers";
+import type { WorldSnapshot, VisualizationConfig, MetadataMessage, SnapshotMessage } from "../lib/types";
+import { MockWebSocket, makeEntity, makeSnapshot, makeConfig, setWorldState } from "./helpers";
 
 describe("InspectorPanel", () => {
   beforeEach(() => {
@@ -125,5 +126,139 @@ describe("InspectorPanel", () => {
       expect(container.textContent).toContain("Entity #2");
     });
     expect(container.textContent).toContain("Bar");
+  });
+
+  describe("diff display", () => {
+    beforeEach(() => {
+      world.connect("ws://test/ws");
+      MockWebSocket.instances[0].simulateOpen();
+    });
+
+    it("shows diff summary when entity changed", () => {
+      const snap1 = makeSnapshot({ tick: 1 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot: snap1,
+      } satisfies SnapshotMessage);
+
+      const snap2 = makeSnapshot({
+        tick: 2,
+        entities: [
+          {
+            id: 1,
+            archetype: ["Agent", "Position"],
+            components: [
+              { type_name: "Agent", type_short: "Agent", data: { name: "a1" } },
+              { type_name: "Position", type_short: "Position", data: { x: 10, y: 20 } },
+            ],
+          },
+          {
+            id: 2,
+            archetype: ["Task"],
+            components: [
+              { type_name: "Task", type_short: "Task", data: { status: "active" } },
+            ],
+          },
+        ],
+      });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 2,
+        snapshot: snap2,
+      } satisfies SnapshotMessage);
+
+      world.selectEntity(1);
+      const { container } = render(InspectorPanel);
+      const summary = container.querySelector("[data-testid='diff-summary']");
+      expect(summary).toBeTruthy();
+      expect(summary!.textContent).toContain("2 changes");
+      expect(summary!.textContent).toContain("since tick 1");
+    });
+
+    it("shows per-component change badge", () => {
+      const snap1 = makeSnapshot({ tick: 1 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot: snap1,
+      } satisfies SnapshotMessage);
+
+      const snap2 = makeSnapshot({
+        tick: 2,
+        entities: [
+          {
+            id: 1,
+            archetype: ["Agent", "Position"],
+            components: [
+              { type_name: "Agent", type_short: "Agent", data: { name: "a1" } },
+              { type_name: "Position", type_short: "Position", data: { x: 5, y: 0 } },
+            ],
+          },
+          {
+            id: 2,
+            archetype: ["Task"],
+            components: [
+              { type_name: "Task", type_short: "Task", data: { status: "active" } },
+            ],
+          },
+        ],
+      });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 2,
+        snapshot: snap2,
+      } satisfies SnapshotMessage);
+
+      world.selectEntity(1);
+      const { container } = render(InspectorPanel);
+      const badge = container.querySelector("[data-testid='component-diff-badge']");
+      expect(badge).toBeTruthy();
+      expect(badge!.textContent?.trim()).toBe("1");
+    });
+
+    it("no diff summary for unchanged entity", () => {
+      const snap1 = makeSnapshot({ tick: 1 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot: snap1,
+      } satisfies SnapshotMessage);
+
+      const snap2 = makeSnapshot({ tick: 2 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 2,
+        snapshot: snap2,
+      } satisfies SnapshotMessage);
+
+      world.selectEntity(2);
+      const { container } = render(InspectorPanel);
+      expect(container.querySelector("[data-testid='diff-summary']")).toBeNull();
+    });
+
+    it("pin button visible when history supported", () => {
+      MockWebSocket.instances[0].simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: makeConfig(),
+        tick_range: [0, 10],
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+
+      const snap = makeSnapshot({ tick: 1 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot: snap,
+      } satisfies SnapshotMessage);
+
+      world.selectEntity(1);
+      const { container } = render(InspectorPanel);
+      const pinBtn = container.querySelector("[data-testid='pin-state-btn']");
+      expect(pinBtn).toBeTruthy();
+      expect(pinBtn!.textContent).toContain("Pin current state");
+    });
   });
 });

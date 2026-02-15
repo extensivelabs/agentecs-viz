@@ -1,14 +1,17 @@
 <script lang="ts">
   import JsonTree from "./JsonTree.svelte";
+  import type { FieldChange } from "./diff";
 
   interface Props {
     data: Record<string, unknown>;
     statusFields?: string[];
     errorFields?: string[];
     depth?: number;
+    diff?: FieldChange[];
+    pathPrefix?: string[];
   }
 
-  let { data, statusFields = [], errorFields = [], depth = 0 }: Props = $props();
+  let { data, statusFields = [], errorFields = [], depth = 0, diff, pathPrefix = [] }: Props = $props();
 
   let collapsed = $state<Record<string, boolean>>({});
 
@@ -43,12 +46,46 @@
   function isErrorField(key: string): boolean {
     return errorFields.includes(key);
   }
+
+  function getFieldChange(key: string): FieldChange | undefined {
+    if (!diff) return undefined;
+    const target = [...pathPrefix, key];
+    return diff.find(
+      (c) => c.path.length === target.length && c.path.every((p, i) => p === target[i]),
+    );
+  }
+
+  function getNestedChanges(key: string): FieldChange[] | undefined {
+    if (!diff) return undefined;
+    const prefix = [...pathPrefix, key];
+    const nested = diff.filter(
+      (c) => c.path.length > prefix.length && prefix.every((p, i) => p === c.path[i]),
+    );
+    return nested.length > 0 ? nested : undefined;
+  }
+
+  function hasNestedChanges(key: string): boolean {
+    return !!getNestedChanges(key);
+  }
+
+  function formatValue(value: unknown): string {
+    if (typeof value === "string") return `"${value}"`;
+    if (value === null) return "null";
+    if (value === undefined) return "undefined";
+    return String(value);
+  }
 </script>
 
 <div class="font-mono text-xs" data-testid="json-tree">
   {#each sortedKeys(data) as key (key)}
     {@const value = data[key]}
-    <div class="py-0.5" style:padding-left={depth > 0 ? "12px" : "0"}>
+    {@const fieldChange = getFieldChange(key)}
+    {@const nested = hasNestedChanges(key)}
+    <div
+      class="py-0.5 {nested && !fieldChange ? 'border-l-2 border-warning/40' : ''} {fieldChange?.type === 'changed' ? 'bg-warning/20' : ''} {fieldChange?.type === 'added' ? 'bg-success/20' : ''}"
+      style:padding-left={depth > 0 ? "12px" : "0"}
+      data-diff-type={fieldChange?.type ?? (nested ? "nested" : undefined)}
+    >
       {#if isObject(value)}
         <button
           class="flex items-center gap-1 text-left text-text-secondary hover:text-text-primary"
@@ -62,7 +99,8 @@
           {/if}
         </button>
         {#if !isCollapsed(key)}
-          <JsonTree data={value} {statusFields} {errorFields} depth={depth + 1} />
+          <JsonTree data={value} {statusFields} {errorFields} depth={depth + 1}
+            diff={diff} pathPrefix={[...pathPrefix, key]} />
         {/if}
       {:else if isArray(value)}
         <button
@@ -93,7 +131,8 @@
                     {/if}
                   </button>
                   {#if !isCollapsed(`${key}.${i}`, true)}
-                    <JsonTree data={item} {statusFields} {errorFields} depth={depth + 1} />
+                    <JsonTree data={item} {statusFields} {errorFields} depth={depth + 1}
+                      diff={diff} pathPrefix={[...pathPrefix, key, String(i)]} />
                   {/if}
                 {:else}
                   <span class="text-text-muted">{i}:</span>
@@ -113,6 +152,20 @@
             {/each}
           </div>
         {/if}
+      {:else if fieldChange?.type === "changed"}
+        <div class="flex items-center gap-1" data-testid="diff-changed">
+          <span class="inline-block w-3"></span>
+          <span class:text-accent={isStatusField(key)} class:text-error={isErrorField(key)} class="text-text-secondary">{key}:</span>
+          <span class="text-text-muted line-through">{formatValue(fieldChange.oldValue)}</span>
+          <span class="text-text-muted">&rarr;</span>
+          <span class="text-warning">{formatValue(value)}</span>
+        </div>
+      {:else if fieldChange?.type === "added"}
+        <div class="flex items-center gap-1 text-success" data-testid="diff-added">
+          <span class="inline-block w-3"></span>
+          <span>{key}:</span>
+          <span>{formatValue(value)}</span>
+        </div>
       {:else}
         <div class="flex items-center gap-1">
           <span class="inline-block w-3"></span>

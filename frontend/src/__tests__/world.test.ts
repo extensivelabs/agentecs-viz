@@ -394,4 +394,152 @@ describe("WorldState", () => {
       });
     });
   });
+
+  describe("diff tracking", () => {
+    beforeEach(() => {
+      state.connect("ws://test/ws");
+      MockWebSocket.instances[0].simulateOpen();
+    });
+
+    it("previousSnapshot is null before first snapshot", () => {
+      expect(state.previousSnapshot).toBeNull();
+    });
+
+    it("stores previousSnapshot on second snapshot", () => {
+      const snap1 = makeSnapshot({ tick: 1 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot: snap1,
+      } satisfies SnapshotMessage);
+
+      expect(state.previousSnapshot).toBeNull();
+
+      const snap2 = makeSnapshot({ tick: 2 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 2,
+        snapshot: snap2,
+      } satisfies SnapshotMessage);
+
+      expect(state.previousSnapshot).not.toBeNull();
+      expect(state.previousSnapshot!.tick).toBe(1);
+    });
+
+    it("computes selectedEntityDiff for changed entity", () => {
+      const snap1 = makeSnapshot({ tick: 1 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot: snap1,
+      } satisfies SnapshotMessage);
+
+      const snap2 = makeSnapshot({
+        tick: 2,
+        entities: [
+          {
+            id: 1,
+            archetype: ["Agent", "Position"],
+            components: [
+              { type_name: "Agent", type_short: "Agent", data: { name: "a1" } },
+              { type_name: "Position", type_short: "Position", data: { x: 10, y: 20 } },
+            ],
+          },
+          {
+            id: 2,
+            archetype: ["Task"],
+            components: [
+              { type_name: "Task", type_short: "Task", data: { status: "active" } },
+            ],
+          },
+        ],
+      });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 2,
+        snapshot: snap2,
+      } satisfies SnapshotMessage);
+
+      state.selectEntity(1);
+      expect(state.selectedEntityDiff).not.toBeNull();
+      expect(state.selectedEntityDiff!.totalChanges).toBe(2);
+    });
+
+    it("entityDiffCounts maps changed IDs to counts", () => {
+      const snap1 = makeSnapshot({ tick: 1 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot: snap1,
+      } satisfies SnapshotMessage);
+
+      const snap2 = makeSnapshot({
+        tick: 2,
+        entities: [
+          {
+            id: 1,
+            archetype: ["Agent", "Position"],
+            components: [
+              { type_name: "Agent", type_short: "Agent", data: { name: "a1" } },
+              { type_name: "Position", type_short: "Position", data: { x: 5, y: 0 } },
+            ],
+          },
+          {
+            id: 2,
+            archetype: ["Task"],
+            components: [
+              { type_name: "Task", type_short: "Task", data: { status: "active" } },
+            ],
+          },
+        ],
+      });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 2,
+        snapshot: snap2,
+      } satisfies SnapshotMessage);
+
+      expect(state.entityDiffCounts.get(1)).toBe(1);
+      expect(state.entityDiffCounts.has(2)).toBe(false);
+    });
+
+    it("resets previousSnapshot on disconnect", () => {
+      const snap1 = makeSnapshot({ tick: 1 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot: snap1,
+      } satisfies SnapshotMessage);
+
+      const snap2 = makeSnapshot({ tick: 2 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 2,
+        snapshot: snap2,
+      } satisfies SnapshotMessage);
+
+      expect(state.previousSnapshot).not.toBeNull();
+      state.disconnect();
+      expect(state.previousSnapshot).toBeNull();
+    });
+
+    it("pin/clear cycle stores and clears entity state", () => {
+      const snap = makeSnapshot({ tick: 5 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 5,
+        snapshot: snap,
+      } satisfies SnapshotMessage);
+
+      state.pinCurrentState();
+      expect(state.pinnedTick).toBe(5);
+      expect(state.pinnedEntityState).not.toBeNull();
+      expect(state.pinnedEntityState!.get(1)).toBeDefined();
+      expect(state.pinnedTick).toBe(5);
+
+      state.clearPinnedState();
+      expect(state.pinnedTick).toBeNull();
+      expect(state.pinnedEntityState).toBeNull();
+    });
+  });
 });
