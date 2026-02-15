@@ -34,6 +34,7 @@
   let entityGraphics = new Map<number, Graphics>();
   let entityHitRadii = new Map<number, number>();
   let entityLabels = new Map<number, Text>();
+  let entityBadges = new Map<number, Text>();
   let lastLayoutTick = -1;
   let cachedLayout = new Map<number, { x: number; y: number }>();
 
@@ -212,6 +213,31 @@
         const label = entityLabels.get(entity.id);
         if (label) label.visible = false;
       }
+
+      // Diff badges
+      const diffCount = isDetail ? world.entityDiffCounts.get(entity.id) : undefined;
+      if (diffCount) {
+        let badge = entityBadges.get(entity.id);
+        if (!badge) {
+          badge = new Text({
+            text: "",
+            style: new TextStyle({
+              fontSize: 8,
+              fill: CHANGED_RING_COLOR,
+              fontFamily: "monospace",
+            }),
+          });
+          badge.anchor.set(0, 1);
+          viewport.addChild(badge);
+          entityBadges.set(entity.id, badge);
+        }
+        badge.text = `${diffCount}`;
+        badge.position.set(pos.x + radius + 6, pos.y - radius - 4);
+        badge.visible = true;
+      } else {
+        const badge = entityBadges.get(entity.id);
+        if (badge) badge.visible = false;
+      }
     }
 
     // Remove stale graphics
@@ -230,6 +256,11 @@
           label.destroy();
           entityLabels.delete(id);
         }
+        const badge = entityBadges.get(id);
+        if (badge) {
+          badge.destroy();
+          entityBadges.delete(id);
+        }
       }
     }
   }
@@ -243,6 +274,7 @@
       entityGraphics = new Map();
       entityHitRadii = new Map();
       entityLabels = new Map();
+      entityBadges = new Map();
       entityTooltips = new Map();
       cachedLayout = new Map();
       lastLayoutTick = -1;
@@ -320,6 +352,7 @@
       entityGraphics.clear();
       entityHitRadii.clear();
       entityLabels.clear();
+      entityBadges.clear();
       entityTooltips.clear();
       if (app && !initFailed) {
         try { app.destroy(true); } catch { /* renderer may not exist */ }
@@ -334,6 +367,7 @@
     void world.entities;
     void world.selectedEntityId;
     void world.changedEntityIds;
+    void world.entityDiffCounts;
     void currentViewLevel;
 
     renderEntities();

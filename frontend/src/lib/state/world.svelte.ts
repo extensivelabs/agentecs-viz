@@ -1,4 +1,5 @@
 import { WS_URL } from "../config";
+import { diffEntity, type EntityDiff } from "../diff";
 import type {
   ArchetypeConfig,
   ConnectionState,
@@ -25,6 +26,10 @@ export class WorldState {
 
   newEntityIds: Set<number> = $state(new Set());
   changedEntityIds: Set<number> = $state(new Set());
+
+  previousSnapshot: WorldSnapshot | null = $state(null);
+  pinnedEntityState: Map<number, EntitySnapshot> | null = $state(null);
+  pinnedTick: number | null = $state(null);
 
   private client: WebSocketClient | null = null;
   private entityHashes = new Map<number, string>();
@@ -73,6 +78,49 @@ export class WorldState {
     return map;
   });
 
+  selectedEntityDiff: EntityDiff | null = $derived.by(() => {
+    if (!this.selectedEntity || !this.previousSnapshot) return null;
+    const prev = this.previousSnapshot.entities.find(
+      (e) => e.id === this.selectedEntityId,
+    );
+    if (!prev) return null;
+    const diff = diffEntity(prev, this.selectedEntity);
+    return diff.totalChanges > 0 ? diff : null;
+  });
+
+  entityDiffCounts: Map<number, number> = $derived.by(() => {
+    const counts = new Map<number, number>();
+    if (!this.previousSnapshot) return counts;
+    const prevMap = new Map(
+      this.previousSnapshot.entities.map((e) => [e.id, e]),
+    );
+    const curMap = new Map(this.entities.map((e) => [e.id, e]));
+    for (const id of this.changedEntityIds) {
+      const prev = prevMap.get(id);
+      const cur = curMap.get(id);
+      if (prev && cur) {
+        const diff = diffEntity(prev, cur);
+        if (diff.totalChanges > 0) {
+          counts.set(id, diff.totalChanges);
+        }
+      }
+    }
+    return counts;
+  });
+
+  selectedEntityPinnedDiff: EntityDiff | null = $derived.by(() => {
+    if (
+      !this.selectedEntity ||
+      !this.pinnedEntityState ||
+      this.selectedEntityId === null
+    )
+      return null;
+    const pinned = this.pinnedEntityState.get(this.selectedEntityId);
+    if (!pinned) return null;
+    const diff = diffEntity(pinned, this.selectedEntity);
+    return diff.totalChanges > 0 ? diff : null;
+  });
+
   connect(url?: string): void {
     if (this.client) this.disconnect();
 
@@ -82,6 +130,9 @@ export class WorldState {
         this.connectionState = state;
         if (state === "disconnected" || state === "error") {
           this.snapshot = null;
+          this.previousSnapshot = null;
+          this.pinnedEntityState = null;
+          this.pinnedTick = null;
           this.config = null;
           this.tickRange = null;
           this.supportsHistory = false;
@@ -154,6 +205,19 @@ export class WorldState {
     this.startReplay(speed);
   }
 
+  pinCurrentState(): void {
+    if (!this.snapshot) return;
+    this.pinnedEntityState = new Map(
+      this.snapshot.entities.map((e) => [e.id, e]),
+    );
+    this.pinnedTick = this.snapshot.tick;
+  }
+
+  clearPinnedState(): void {
+    this.pinnedEntityState = null;
+    this.pinnedTick = null;
+  }
+
   private handleMessage(msg: ServerMessage): void {
     switch (msg.type) {
       case "metadata":
@@ -165,6 +229,7 @@ export class WorldState {
 
       case "snapshot":
         this.updateEntityTracking(msg.snapshot);
+        this.previousSnapshot = this.snapshot;
         this.snapshot = msg.snapshot;
         break;
 
