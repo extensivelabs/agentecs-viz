@@ -125,6 +125,11 @@ export class WorldState {
     this.client?.step();
   }
 
+  stepBack(): void {
+    if (!this.canScrub || this.tick <= this.minTick) return;
+    this.seek(this.tick - 1);
+  }
+
   goToLive(): void {
     if (this.tickRange) {
       this.seek(this.tickRange[1]);
@@ -144,9 +149,9 @@ export class WorldState {
     this.selectedEntityId = id;
   }
 
-  play(): void {
+  play(speed?: number): void {
     if (!this.supportsHistory || !this.tickRange) return;
-    this.startReplay();
+    this.startReplay(speed);
   }
 
   private handleMessage(msg: ServerMessage): void {
@@ -185,7 +190,7 @@ export class WorldState {
         break;
 
       case "delta":
-        // Delta application deferred to REQ-006/007
+        // Delta application deferred to REQ-007
         break;
     }
   }
@@ -213,9 +218,10 @@ export class WorldState {
     this.changedEntityIds = changedIds;
   }
 
-  private startReplay(): void {
+  private startReplay(speed?: number): void {
     this.stopReplay();
     this.isReplayPlaying = true;
+    const interval = speed ? 1000 / speed : 1000;
     this.replayTimer = setInterval(() => {
       if (!this.tickRange || !this.snapshot) {
         this.stopReplay();
@@ -227,7 +233,7 @@ export class WorldState {
         return;
       }
       this.seek(next);
-    }, 1000);
+    }, interval);
   }
 
   private stopReplay(): void {

@@ -72,6 +72,47 @@ describe("App", () => {
     expect(tabLabels).toContain("Archetypes");
   });
 
+  it("renders TimelineBar in connected state", async () => {
+    render(App);
+
+    const ws = MockWebSocket.instances[0];
+    ws.simulateOpen();
+
+    ws.simulateMessage({
+      type: "metadata",
+      tick: 0,
+      config: {
+        world_name: "Test",
+        archetypes: [],
+        component_metrics: [],
+        field_hints: { status_fields: [], error_fields: [] },
+        chat_enabled: false,
+        entity_label_template: null,
+        color_palette: null,
+      },
+      tick_range: [0, 5],
+      supports_history: true,
+      is_paused: false,
+    });
+
+    ws.simulateMessage({
+      type: "snapshot",
+      tick: 1,
+      snapshot: {
+        tick: 1,
+        timestamp: Date.now() / 1000,
+        entity_count: 0,
+        entities: [],
+        archetypes: [],
+        metadata: {},
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(screen.getByRole("toolbar")).toBeTruthy();
+    });
+  });
+
   it("shows error state when connection fails", async () => {
     render(App);
 

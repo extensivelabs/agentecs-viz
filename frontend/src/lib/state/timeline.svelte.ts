@@ -11,9 +11,8 @@ export class TimelineState {
 
   nextSpeed(): void {
     const idx = this.availableSpeeds.indexOf(this.playbackSpeed);
-    if (idx < this.availableSpeeds.length - 1) {
-      this.setSpeed(this.availableSpeeds[idx + 1]);
-    }
+    const next = (idx + 1) % this.availableSpeeds.length;
+    this.setSpeed(this.availableSpeeds[next]);
   }
 
   prevSpeed(): void {
