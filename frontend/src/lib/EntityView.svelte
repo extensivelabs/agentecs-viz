@@ -5,7 +5,7 @@
   import { world } from "./state/world.svelte";
   import { getArchetypeColor, getArchetypeColorCSS } from "./colors";
   import { getArchetypeKey, getArchetypeDisplay } from "./utils";
-  import { computeLayout, type FocusMode } from "./layout";
+  import { computeLayout } from "./layout";
   import {
     WORLD_SIZE,
     BACKGROUND_COLOR,
@@ -28,7 +28,6 @@
   let viewport: Viewport | null = $state(null);
 
   let viewLevelOverride: ViewLevel = $state("auto");
-  let focusMode: FocusMode = $state("archetypes");
   let currentViewLevel: "detail" | "overview" = $state("detail");
 
   // Entity graphics cache
@@ -36,7 +35,6 @@
   let entityHitRadii = new Map<number, number>();
   let entityLabels = new Map<number, Text>();
   let lastLayoutTick = -1;
-  let lastFocusMode: FocusMode | null = null;
   let cachedLayout = new Map<number, { x: number; y: number }>();
 
   // Entity tooltip cache (built during render for O(1) hover lookup)
@@ -111,10 +109,9 @@
 
   function getLayout() {
     const tick = world.tick;
-    if (tick !== lastLayoutTick || focusMode !== lastFocusMode) {
-      cachedLayout = computeLayout(world.entities, focusMode);
+    if (tick !== lastLayoutTick) {
+      cachedLayout = computeLayout(world.entities);
       lastLayoutTick = tick;
-      lastFocusMode = focusMode;
     }
     return cachedLayout;
   }
@@ -249,7 +246,6 @@
       entityTooltips = new Map();
       cachedLayout = new Map();
       lastLayoutTick = -1;
-      lastFocusMode = null;
       initialFitDone = false;
 
       try {
@@ -339,7 +335,6 @@
     void world.selectedEntityId;
     void world.changedEntityIds;
     void currentViewLevel;
-    void focusMode;
 
     renderEntities();
 
@@ -368,17 +363,6 @@
         {level}
       </button>
     {/each}
-  </div>
-
-  <!-- Focus mode dropdown -->
-  <div class="absolute left-3 top-3 rounded bg-bg-secondary/90 px-2 py-1 text-xs">
-    <select
-      class="cursor-pointer bg-transparent text-text-secondary outline-none"
-      bind:value={focusMode}
-    >
-      <option value="archetypes">Archetypes</option>
-      <option value="components">Components</option>
-    </select>
   </div>
 
   <!-- Archetype legend -->

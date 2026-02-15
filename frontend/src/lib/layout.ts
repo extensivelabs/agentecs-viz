@@ -2,8 +2,6 @@ import type { EntitySnapshot } from "./types";
 import { getArchetypeKey } from "./utils";
 import { layoutSpacing, WORLD_SIZE } from "./rendering";
 
-export type FocusMode = "archetypes" | "components";
-
 export interface EntityPosition {
   x: number;
   y: number;
@@ -36,7 +34,7 @@ function clampToWorld(v: number): number {
   return Math.max(0, Math.min(WORLD_SIZE, v));
 }
 
-export function archetypeLayout(entities: EntitySnapshot[]): Map<number, EntityPosition> {
+export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityPosition> {
   const positions = new Map<number, EntityPosition>();
   if (entities.length === 0) return positions;
 
@@ -44,8 +42,8 @@ export function archetypeLayout(entities: EntitySnapshot[]): Map<number, EntityP
   const center = WORLD_SIZE / 2;
   const scale = WORLD_SIZE / 200;
 
-  const unpositioned = new Map<string, EntitySnapshot[]>();
-
+  // Separate entities with Position components from those needing layout
+  const unpositioned: EntitySnapshot[] = [];
   for (const entity of entities) {
     const pos = hasPositionComponent(entity);
     if (pos) {
@@ -54,52 +52,15 @@ export function archetypeLayout(entities: EntitySnapshot[]): Map<number, EntityP
         y: clampToWorld(center + pos.y * scale),
       });
     } else {
-      const key = getArchetypeKey(entity.archetype);
-      let group = unpositioned.get(key);
-      if (!group) {
-        group = [];
-        unpositioned.set(key, group);
-      }
-      group.push(entity);
+      unpositioned.push(entity);
     }
   }
 
-  if (unpositioned.size === 0) return positions;
+  if (unpositioned.length === 0) return positions;
 
-  // Arrange unpositioned groups in a circle around center
-  const sortedKeys = [...unpositioned.keys()].sort();
-  const groupCount = sortedKeys.length;
-  const orbitRadius = WORLD_SIZE * 0.3;
-
-  for (let i = 0; i < groupCount; i++) {
-    const key = sortedKeys[i];
-    const group = unpositioned.get(key)!;
-    const angle = (2 * Math.PI * i) / groupCount - Math.PI / 2;
-    const cx = center + Math.cos(angle) * orbitRadius;
-    const cy = center + Math.sin(angle) * orbitRadius;
-
-    for (let j = 0; j < group.length; j++) {
-      const pos = spiralPosition(j, cx, cy, spacing);
-      positions.set(group[j].id, {
-        x: clampToWorld(pos.x),
-        y: clampToWorld(pos.y),
-      });
-    }
-  }
-
-  return positions;
-}
-
-export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityPosition> {
-  const positions = new Map<number, EntityPosition>();
-  if (entities.length === 0) return positions;
-
-  const spacing = layoutSpacing(entities.length);
-  const center = WORLD_SIZE / 2;
-
-  // Group entities by archetype
+  // Group unpositioned entities by archetype
   const groups = new Map<string, EntitySnapshot[]>();
-  for (const entity of entities) {
+  for (const entity of unpositioned) {
     const key = getArchetypeKey(entity.archetype);
     let group = groups.get(key);
     if (!group) {
@@ -111,7 +72,7 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
 
   // Collect all unique component names and assign anchor points on a circle
   const allComponents = new Set<string>();
-  for (const entity of entities) {
+  for (const entity of unpositioned) {
     for (const comp of entity.archetype) {
       allComponents.add(comp);
     }
@@ -163,6 +124,6 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
   return positions;
 }
 
-export function computeLayout(entities: EntitySnapshot[], mode: FocusMode): Map<number, EntityPosition> {
-  return mode === "components" ? componentLayout(entities) : archetypeLayout(entities);
+export function computeLayout(entities: EntitySnapshot[]): Map<number, EntityPosition> {
+  return componentLayout(entities);
 }

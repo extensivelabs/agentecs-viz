@@ -111,48 +111,6 @@ Remove the Archetypes focus mode from Entity View. Archetypes mode is redundant 
 
 ---
 
-### REQ-025: EntityView Lifecycle & Reactivity
-- [ ] Completed
-- **Branch:** `feature/req-025-entityview-lifecycle`
-- **Task List:** `feature/req-025-entityview-lifecycle`
-- **Started:**
-- **Completed:**
-- **Priority:** P1
-- **Blocked by:** REQ-004
-
-Several reactivity and lifecycle issues in `EntityView.svelte` that will cause bugs as the app grows.
-
-**Scope:**
-
-*`viewport` is not reactive (line 329):*
-- `viewport` is a plain `let` variable, not `$state`
-- `void viewport` in `$effect` does NOT establish reactive tracking
-- Changes to `viewport` during async init won't re-trigger the render effect
-- Fix: make `viewport` a `$state` rune
-
-*PixiJS object Maps survive re-mount (lines 35-40):*
-- `entityGraphics`, `entityHitRadii`, `entityLabels` are closure-scoped `let` Maps
-- If the component re-mounts (e.g., tab switch), stale references persist
-- Fix: re-initialize Maps inside `onMount`, not at module scope
-
-*O(n) hover lookup (line 157):*
-- `pointerover` handler calls `world.entities.find((en) => en.id === entityId)` on every hover
-- Fix: use a `Map<number, EntitySnapshot>` lookup built once per render cycle
-
-*Set reactivity audit (world.svelte.ts lines 26-27):*
-- `newEntityIds` and `changedEntityIds` are `$state(new Set())`
-- Full Set reassignment in `updateEntityTracking` should trigger reactivity, but `.has()` tracking may be unreliable
-- Audit and confirm or fix
-
-**Acceptance Criteria:**
-- `viewport` change triggers re-render
-- Component re-mount starts with clean state
-- Hover lookup is O(1)
-- Set reactivity verified with test
-- All existing tests pass
-
----
-
 ### REQ-026: Frontend Robustness
 - [ ] Completed
 - **Branch:** `feature/req-026-frontend-robustness`
@@ -721,7 +679,7 @@ Recommended sequence respecting dependencies:
  5. REQ-022  History Performance       P1  (architecture fix, no deps)
  6. REQ-023  Shared Test Infra         P1  (enables faster test writing)
  7. REQ-024  Version Source of Truth   P1  done
- 8. REQ-025  EntityView Lifecycle      P1  (fix before building on EntityView)
+ 8. REQ-025  EntityView Lifecycle      P1  ✅
  ── Phase 1 ──────────────────────────────
  9. REQ-004  Entity View               P1  ✅
 10. REQ-005  Inspector Panel           P1  ✅

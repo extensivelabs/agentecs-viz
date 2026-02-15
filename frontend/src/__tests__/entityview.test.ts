@@ -35,12 +35,6 @@ describe("EntityView", () => {
     expect(labels).toContain("overview");
   });
 
-  it("renders focus mode selector", () => {
-    const { container } = render(EntityView);
-    const select = container.querySelector("select");
-    expect(select).toBeTruthy();
-  });
-
   it("renders zoom control buttons", () => {
     const { container } = render(EntityView);
     const buttons = container.querySelectorAll("button");
