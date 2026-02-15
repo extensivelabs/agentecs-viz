@@ -1,13 +1,6 @@
 <script lang="ts">
   import { world } from "./state/world.svelte";
 
-  const playIcon =
-    "M8 5.14v14l11-7-11-7z";
-  const pauseIcon =
-    "M6 19h4V5H6v14zm8-14v14h4V5h-4z";
-  const stepIcon =
-    "M6 18l8.5-6L6 6v12zm2 0h3v-12h-3v12z";
-
   let tickInputValue: string = $state("");
   let isEditingTick = $state(false);
 
@@ -81,43 +74,9 @@
       <span><span class="font-mono text-text-primary">{world.entityCount}</span> entities</span>
     </div>
 
-    <div class="ml-auto flex items-center gap-1">
-      <button
-        class="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
-        onclick={() => world.togglePause()}
-        title={world.isPaused ? "Resume" : "Pause"}
-        aria-label={world.isPaused ? "Resume" : "Pause"}
-      >
-        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-          <path d={world.isPaused ? playIcon : pauseIcon} />
-        </svg>
-      </button>
-
-      {#if world.isPaused}
-        <button
-          class="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
-          onclick={() => world.step()}
-          title="Step"
-          aria-label="Step forward one tick"
-        >
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-            <path d={stepIcon} />
-          </svg>
-        </button>
-      {/if}
-
-      {#if !world.isAtLive && world.supportsHistory}
-        <button
-          class="rounded px-2 py-0.5 text-xs font-medium text-accent hover:bg-bg-tertiary"
-          onclick={() => world.goToLive()}
-        >
-          LIVE
-        </button>
-      {/if}
-    </div>
   {/if}
 
-  <div class="flex items-center gap-1.5" class:ml-auto={!world.isConnected}>
+  <div class="ml-auto flex items-center gap-1.5">
     <span
       class="h-2 w-2 rounded-full"
       class:bg-success={world.connectionState === "connected"}

@@ -286,6 +286,86 @@ describe("WorldState", () => {
     });
   });
 
+  describe("stepBack", () => {
+    it("seeks to tick - 1 when history available", () => {
+      state.connect("ws://test/ws");
+      const ws = MockWebSocket.instances[0];
+      ws.simulateOpen();
+
+      ws.simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: null,
+        tick_range: [0, 10],
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+
+      const snapshot = makeSnapshot({ tick: 5 });
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 5,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      state.stepBack();
+      const lastMsg = JSON.parse(ws.sentMessages[ws.sentMessages.length - 1]);
+      expect(lastMsg).toEqual({ command: "seek", tick: 4 });
+    });
+
+    it("no-op at min tick", () => {
+      state.connect("ws://test/ws");
+      const ws = MockWebSocket.instances[0];
+      ws.simulateOpen();
+
+      ws.simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: null,
+        tick_range: [0, 10],
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+
+      const snapshot = makeSnapshot({ tick: 0 });
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 0,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      const msgCountBefore = ws.sentMessages.length;
+      state.stepBack();
+      expect(ws.sentMessages.length).toBe(msgCountBefore);
+    });
+
+    it("no-op when history not supported", () => {
+      state.connect("ws://test/ws");
+      const ws = MockWebSocket.instances[0];
+      ws.simulateOpen();
+
+      ws.simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: null,
+        tick_range: null,
+        supports_history: false,
+        is_paused: false,
+      } satisfies MetadataMessage);
+
+      const snapshot = makeSnapshot({ tick: 5 });
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 5,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      const msgCountBefore = ws.sentMessages.length;
+      state.stepBack();
+      expect(ws.sentMessages.length).toBe(msgCountBefore);
+    });
+  });
+
   describe("commands", () => {
     it("sends commands through WebSocket", () => {
       state.connect("ws://test/ws");

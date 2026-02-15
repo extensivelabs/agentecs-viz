@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import Header from "./lib/Header.svelte";
   import TabBar from "./lib/TabBar.svelte";
+  import TimelineBar from "./lib/TimelineBar.svelte";
   import StatusBar from "./lib/StatusBar.svelte";
   import { world } from "./lib/state/world.svelte";
   import EntityView from "./lib/EntityView.svelte";
@@ -96,6 +97,7 @@
     {/if}
 
     <TabBar {tabs} {activeTab} onTabChange={(id) => (activeTab = id)} />
+    <TimelineBar />
 
     <main class="flex-1 overflow-hidden">
       {#if activeTab === "entities"}
@@ -111,7 +113,7 @@
         </div>
       {:else if activeTab === "timeline"}
         <div class="flex h-full items-center justify-center text-text-muted text-sm">
-          Timeline View (REQ-006)
+          Timeline Analysis (REQ-015)
         </div>
       {:else if activeTab === "archetypes"}
         <div class="flex h-full items-center justify-center text-text-muted text-sm">
