@@ -161,6 +161,28 @@ describe("WorldState", () => {
       expect(state.newEntityIds.has(2)).toBe(true);
     });
 
+    it("creates new Set objects on each update (ensures Svelte reactivity)", () => {
+      const snapshot1 = makeSnapshot();
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot: snapshot1,
+      } satisfies SnapshotMessage);
+
+      const newIdsRef1 = state.newEntityIds;
+      const changedIdsRef1 = state.changedEntityIds;
+
+      const snapshot2 = makeSnapshot({ tick: 2 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 2,
+        snapshot: snapshot2,
+      } satisfies SnapshotMessage);
+
+      expect(state.newEntityIds).not.toBe(newIdsRef1);
+      expect(state.changedEntityIds).not.toBe(changedIdsRef1);
+    });
+
     it("detects changed entities", () => {
       const snapshot1 = makeSnapshot();
       MockWebSocket.instances[0].simulateMessage({

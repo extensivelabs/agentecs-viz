@@ -25,7 +25,7 @@
 
   let containerEl: HTMLDivElement;
   let app: Application | null = null;
-  let viewport: Viewport | null = null;
+  let viewport: Viewport | null = $state(null);
 
   let viewLevelOverride: ViewLevel = $state("auto");
   let focusMode: FocusMode = $state("archetypes");
@@ -38,6 +38,9 @@
   let lastLayoutTick = -1;
   let lastFocusMode: FocusMode | null = null;
   let cachedLayout = new Map<number, { x: number; y: number }>();
+
+  // Entity tooltip cache (built during render for O(1) hover lookup)
+  let entityTooltips = new Map<number, string>();
 
   // Tooltip state
   let tooltipText: string = $state("");
@@ -155,9 +158,7 @@
         });
 
         gfx.on("pointerover", (e) => {
-          const ent = world.entities.find((en) => en.id === entityId);
-          const archDisplay = ent ? getArchetypeDisplay(ent.archetype) : "";
-          tooltipText = `Entity ${entityId}\n${archDisplay}`;
+          tooltipText = entityTooltips.get(entityId) ?? `Entity ${entityId}`;
           const global = e.global;
           tooltipX = global.x + 12;
           tooltipY = global.y - 8;
@@ -189,6 +190,7 @@
       }
 
       gfx.position.set(pos.x, pos.y);
+      entityTooltips.set(entity.id, `Entity ${entity.id}\n${getArchetypeDisplay(entity.archetype)}`);
       const hitRadius = Math.max(radius, MIN_HIT_RADIUS);
       if (entityHitRadii.get(entity.id) !== hitRadius) {
         gfx.hitArea = new Circle(0, 0, hitRadius);
@@ -229,6 +231,7 @@
         gfx.destroy();
         entityGraphics.delete(id);
         entityHitRadii.delete(id);
+        entityTooltips.delete(id);
         const label = entityLabels.get(id);
         if (label) {
           label.destroy();
@@ -244,6 +247,15 @@
     let initFailed = false;
 
     async function init() {
+      entityGraphics = new Map();
+      entityHitRadii = new Map();
+      entityLabels = new Map();
+      entityTooltips = new Map();
+      cachedLayout = new Map();
+      lastLayoutTick = -1;
+      lastFocusMode = null;
+      initialFitDone = false;
+
       try {
         app = new Application();
         await app.init({
@@ -317,6 +329,7 @@
       entityGraphics.clear();
       entityHitRadii.clear();
       entityLabels.clear();
+      entityTooltips.clear();
       if (app && !initFailed) {
         try { app.destroy(true); } catch { /* renderer may not exist */ }
       }
@@ -333,7 +346,6 @@
     void world.changedEntityIds;
     void currentViewLevel;
     void focusMode;
-    void viewport;
 
     renderEntities();
 
