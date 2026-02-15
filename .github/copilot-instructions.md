@@ -14,6 +14,9 @@
 - `Taskfile.yml`: canonical developer tasks (`test`, `lint`, `typecheck`, `check`, `frontend:build`, etc.).
 
 ## Fastest way to validate changes
+Before using fallbacks, try the repo-native setup first:
+- `task install`
+
 When toolchain is available as defined by the repo:
 1. Backend checks: `task lint && task typecheck && task test`
 2. Frontend checks (when frontend touched):
@@ -28,6 +31,11 @@ For small backend changes, run targeted tests first, then broader checks.
 - Keep changes minimal and localized; avoid broad refactors.
 - Reuse existing protocol/snapshot models rather than introducing parallel message shapes.
 - Preserve existing API/WebSocket message compatibility (tests rely on exact fields like `type`, `tick`, metadata fields).
+
+## Review quality expectations
+- Review changes in full repository context (and `extensivelabs/agentecs` integration context when relevant), not only for immediate test failures.
+- Proactively catch inconsistencies in patterns/approaches, architectural defects, duplication, unnecessary comments, and unnecessary backward-compatibility code.
+- Prefer clean, idiomatic updates that align with existing project conventions over local one-off fixes.
 
 ## Common pitfalls and workarounds (encountered during onboarding)
 1. **`task` command missing in some environments**
