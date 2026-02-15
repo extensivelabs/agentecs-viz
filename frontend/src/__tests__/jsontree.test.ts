@@ -154,5 +154,20 @@ describe("JsonTree", () => {
       const nested = container.querySelector("[data-diff-type='nested']");
       expect(nested).toBeTruthy();
     });
+
+    it("shows removed field with error styling", () => {
+      const diff: FieldChange[] = [
+        { path: ["gone"], oldValue: "old", newValue: undefined, type: "removed" },
+      ];
+      const { container } = render(JsonTree, {
+        props: { data: { remaining: 1 }, diff },
+      });
+      const removed = container.querySelector("[data-testid='diff-removed']");
+      expect(removed).toBeTruthy();
+      expect(removed!.textContent).toContain("gone");
+      expect(removed!.textContent).toContain('"old"');
+      const errorEl = container.querySelector("[data-diff-type='removed']");
+      expect(errorEl).toBeTruthy();
+    });
   });
 });

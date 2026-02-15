@@ -21,6 +21,14 @@
     entity ? [...entity.components].sort((a, b) => a.type_short.localeCompare(b.type_short)) : [],
   );
 
+  let removedComponents = $derived.by(() => {
+    if (!activeDiff) return [];
+    const currentTypes = new Set(sortedComponents.map((c) => c.type_short));
+    return activeDiff.components
+      .filter((c) => c.status === "removed" && !currentTypes.has(c.componentType))
+      .sort((a, b) => a.componentType.localeCompare(b.componentType));
+  });
+
   let statusFields = $derived(world.config?.field_hints?.status_fields ?? []);
   let errorFields = $derived(world.config?.field_hints?.error_fields ?? []);
 
@@ -130,7 +138,7 @@
             <span class="text-text-muted">({fieldCount(comp.data)} {fieldCount(comp.data) === 1 ? "field" : "fields"})</span>
             {#if compChanges}
               <span class="ml-auto rounded bg-warning/20 px-1 text-warning" data-testid="component-diff-badge">
-                {#if compChanges.status === "added"}NEW{:else if compChanges.status === "removed"}DEL{:else}{compChanges.fields.length}{/if}
+                {#if compChanges.status === "added"}NEW{:else}{compChanges.fields.length}{/if}
               </span>
             {/if}
           </button>
@@ -140,6 +148,16 @@
                 diff={compChanges?.fields} pathPrefix={[]} />
             </div>
           {/if}
+        </div>
+      {/each}
+
+      {#each removedComponents as removed (entity.id + ':removed:' + removed.componentType)}
+        <div class="border-b border-bg-tertiary bg-error/10" data-testid="component-section">
+          <div class="flex w-full items-center gap-2 px-4 py-2 text-left text-xs">
+            <span class="inline-block w-3"></span>
+            <span class="font-medium text-error/70">{removed.componentType}</span>
+            <span class="ml-auto rounded bg-error/20 px-1 text-error" data-testid="component-diff-badge">DEL</span>
+          </div>
         </div>
       {/each}
 

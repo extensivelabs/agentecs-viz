@@ -74,6 +74,16 @@
     if (value === undefined) return "undefined";
     return String(value);
   }
+
+  function removedFields(): FieldChange[] {
+    if (!diff) return [];
+    const prefixLen = pathPrefix.length;
+    return diff.filter(
+      (c) => c.type === "removed" && c.path.length === prefixLen + 1
+        && pathPrefix.every((p, i) => p === c.path[i])
+        && !(c.path[prefixLen] in data),
+    );
+  }
 </script>
 
 <div class="font-mono text-xs" data-testid="json-tree">
@@ -191,6 +201,19 @@
           {/if}
         </div>
       {/if}
+    </div>
+  {/each}
+  {#each removedFields() as change (change.path.join("."))}
+    <div
+      class="py-0.5 bg-error/20"
+      style:padding-left={depth > 0 ? "12px" : "0"}
+      data-diff-type="removed"
+    >
+      <div class="flex items-center gap-1 text-error" data-testid="diff-removed">
+        <span class="inline-block w-3"></span>
+        <span>{change.path[change.path.length - 1]}:</span>
+        <span class="line-through">{formatValue(change.oldValue)}</span>
+      </div>
     </div>
   {/each}
 </div>

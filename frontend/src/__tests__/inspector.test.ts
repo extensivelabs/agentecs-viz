@@ -237,6 +237,66 @@ describe("InspectorPanel", () => {
       expect(container.querySelector("[data-testid='diff-summary']")).toBeNull();
     });
 
+    it("shows removed component with DEL badge", () => {
+      const snap1 = makeSnapshot({
+        tick: 1,
+        entities: [
+          {
+            id: 1,
+            archetype: ["Agent", "Position"],
+            components: [
+              { type_name: "Agent", type_short: "Agent", data: { name: "a1" } },
+              { type_name: "Position", type_short: "Position", data: { x: 0, y: 0 } },
+            ],
+          },
+          {
+            id: 2,
+            archetype: ["Task"],
+            components: [
+              { type_name: "Task", type_short: "Task", data: { status: "active" } },
+            ],
+          },
+        ],
+      });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot: snap1,
+      } satisfies SnapshotMessage);
+
+      const snap2 = makeSnapshot({
+        tick: 2,
+        entities: [
+          {
+            id: 1,
+            archetype: ["Agent"],
+            components: [
+              { type_name: "Agent", type_short: "Agent", data: { name: "a1" } },
+            ],
+          },
+          {
+            id: 2,
+            archetype: ["Task"],
+            components: [
+              { type_name: "Task", type_short: "Task", data: { status: "active" } },
+            ],
+          },
+        ],
+      });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 2,
+        snapshot: snap2,
+      } satisfies SnapshotMessage);
+
+      world.selectEntity(1);
+      const { container } = render(InspectorPanel);
+      const badges = container.querySelectorAll("[data-testid='component-diff-badge']");
+      const delBadge = [...badges].find((b) => b.textContent?.trim() === "DEL");
+      expect(delBadge).toBeTruthy();
+      expect(container.textContent).toContain("Position");
+    });
+
     it("pin button visible when history supported", () => {
       MockWebSocket.instances[0].simulateMessage({
         type: "metadata",
