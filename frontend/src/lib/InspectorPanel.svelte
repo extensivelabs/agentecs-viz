@@ -1,6 +1,6 @@
 <script lang="ts">
   import { world } from "./state/world.svelte";
-  import { getArchetypeKey, getArchetypeDisplay } from "./utils";
+  import { getArchetypeKey, getArchetypeDisplay, severityLabel, severityClasses } from "./utils";
   import { getArchetypeColorCSS } from "./colors";
   import JsonTree from "./JsonTree.svelte";
   import type { ComponentChanges } from "./diff";
@@ -102,8 +102,8 @@
               class="flex items-center gap-1.5 py-0.5 text-xs"
               class:opacity-50={error.tick < world.tick}
             >
-              <span class="shrink-0 rounded px-1 py-0.5 text-[10px] font-medium {error.severity === 'critical' ? 'text-error bg-error/20' : error.severity === 'warning' ? 'text-warning bg-warning/20' : 'text-accent bg-accent/20'}">
-                {error.severity === "critical" ? "CRIT" : error.severity === "warning" ? "WARN" : "INFO"}
+              <span class="shrink-0 rounded px-1 py-0.5 text-[10px] font-medium {severityClasses(error.severity)}">
+                {severityLabel(error.severity)}
               </span>
               <span class="font-mono text-text-muted">T{error.tick}</span>
               <span class="min-w-0 truncate text-text-primary">{error.message}</span>

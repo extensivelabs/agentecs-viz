@@ -1,28 +1,11 @@
 <script lang="ts">
   import { world } from "./state/world.svelte";
+  import { severityLabel, severityClasses } from "./utils";
   import type { ErrorEventMessage } from "./types";
 
   let sortedErrors = $derived(
     [...world.visibleErrors].sort((a, b) => b.tick - a.tick),
   );
-
-  function severityLabel(severity: string): string {
-    switch (severity) {
-      case "critical": return "CRIT";
-      case "warning": return "WARN";
-      case "info": return "INFO";
-      default: return severity.toUpperCase();
-    }
-  }
-
-  function severityClasses(severity: string): string {
-    switch (severity) {
-      case "critical": return "text-error bg-error/20";
-      case "warning": return "text-warning bg-warning/20";
-      case "info": return "text-accent bg-accent/20";
-      default: return "text-text-muted bg-bg-tertiary";
-    }
-  }
 
   function isPast(error: ErrorEventMessage): boolean {
     return error.tick < world.tick;

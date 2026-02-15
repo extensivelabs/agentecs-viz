@@ -294,9 +294,11 @@ export class WorldState {
         this.lastError = msg.message;
         break;
 
-      case "error_event":
-        this.errors = [...this.errors, msg];
+      case "error_event": {
+        const updated = [...this.errors, msg];
+        this.errors = updated.length > 1000 ? updated.slice(-1000) : updated;
         break;
+      }
 
       case "delta":
         break;
