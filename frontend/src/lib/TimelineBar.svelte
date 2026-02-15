@@ -146,7 +146,7 @@
         style="width: {thumbPercent}%"
       ></div>
       <div
-        class="absolute top-1/2 -translate-y-1/2 h-3 w-3 rounded-full bg-accent shadow-sm"
+        class="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full bg-accent shadow-sm"
         style="left: {thumbPercent}%"
         class:scale-125={scrubbing}
       ></div>
