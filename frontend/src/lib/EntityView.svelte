@@ -140,7 +140,6 @@
       const color = getArchetypeColor(entity.archetype);
       const radius = isDetail ? entityRadius(entity.components.length, maxR) : OVERVIEW_DOT_RADIUS;
 
-      // Get or create graphics
       let gfx = entityGraphics.get(entity.id);
       if (!gfx) {
         gfx = new Graphics();
@@ -175,16 +174,13 @@
         entityGraphics.set(entity.id, gfx);
       }
 
-      // Redraw
       gfx.clear();
       gfx.circle(0, 0, radius).fill({ color });
 
-      // Selection ring
       if (selectedId === entity.id) {
         gfx.circle(0, 0, radius + 3).stroke({ color: SELECTION_RING_COLOR, width: 2 });
       }
 
-      // Changed ring
       if (world.changedEntityIds.has(entity.id)) {
         gfx.circle(0, 0, radius + (selectedId === entity.id ? 6 : 3)).stroke({ color: CHANGED_RING_COLOR, width: 1.5 });
       }
@@ -299,7 +295,6 @@
       // Initial fit — will be refined once entities arrive
       viewport.fitWorld(true);
 
-      // Listen for zoom changes
       viewport.on("zoomed", () => updateViewLevel());
       viewport.on("moved", () => updateViewLevel());
 
@@ -338,7 +333,6 @@
     };
   });
 
-  // Re-render whenever relevant state changes
   $effect(() => {
     // Read dependencies
     void world.entities;

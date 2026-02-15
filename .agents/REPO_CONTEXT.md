@@ -238,8 +238,13 @@ Runtime-checkable Protocol in `protocol.py`. All data sources implement:
 
 ### Version via importlib.metadata
 - `importlib.metadata.version("agentecs-viz")` reads from installed package metadata (set by `pyproject.toml`)
-- `PackageNotFoundError` fallback to `"0.0.0-dev"` handles editable installs and running from source
+- `PackageNotFoundError` fallback to `"0.0.0-dev"` handles running from source without an installed distribution
 - `_version.py` is the canonical import point; `__init__.py` re-exports `__version__`
+
+### Svelte $state for $effect dependency tracking
+- Variables read inside `$effect` must be `$state` runes for reactive tracking -- plain `let` variables are invisible to the effect system
+- `void someVar` in `$effect` only establishes tracking if `someVar` is `$state`
+- PixiJS object caches (Maps) should be re-initialized inside `onMount`, not at module scope, to handle component re-mount (e.g., tab switches)
 
 ### No task frontend:test or task frontend:check
 - Taskfile only has `task frontend:dev` and `task frontend:build`
