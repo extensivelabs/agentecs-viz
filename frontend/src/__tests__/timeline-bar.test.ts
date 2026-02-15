@@ -131,6 +131,18 @@ describe("TimelineBar", () => {
     expect(btn.textContent).toContain("1x");
   });
 
+  it("speed button cycles through all speeds and wraps around", async () => {
+    connectWithHistory();
+    render(TimelineBar);
+
+    const btn = screen.getByTestId("speed-button");
+    const speeds = ["2x", "5x", "10x", "0.5x", "1x"];
+    for (const expected of speeds) {
+      await fireEvent.click(btn);
+      expect(btn.textContent).toContain(expected);
+    }
+  });
+
   it("mode indicator shows correct label", () => {
     connectWithHistory(5, 10);
     render(TimelineBar);
