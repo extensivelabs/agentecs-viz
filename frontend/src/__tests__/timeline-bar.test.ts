@@ -174,6 +174,28 @@ describe("TimelineBar", () => {
     expect(spy).toHaveBeenCalled();
   });
 
+  it("keyboard shortcuts ignored when input is focused", async () => {
+    connectWithHistory(5, 10);
+    render(TimelineBar);
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+
+    const pauseSpy = vi.spyOn(world, "togglePause");
+    const stepSpy = vi.spyOn(world, "step");
+    const stepBackSpy = vi.spyOn(world, "stepBack");
+
+    await fireEvent.keyDown(input, { key: " " });
+    await fireEvent.keyDown(input, { key: "ArrowRight" });
+    await fireEvent.keyDown(input, { key: "ArrowLeft" });
+
+    expect(pauseSpy).not.toHaveBeenCalled();
+    expect(stepSpy).not.toHaveBeenCalled();
+    expect(stepBackSpy).not.toHaveBeenCalled();
+
+    document.body.removeChild(input);
+  });
+
   it("scrubber has correct ARIA attributes", () => {
     connectWithHistory(5, 10);
     render(TimelineBar);

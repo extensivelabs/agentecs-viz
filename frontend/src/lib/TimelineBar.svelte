@@ -129,16 +129,20 @@
   <span class="text-text-muted">|</span>
 
   <div
-    class="relative flex h-full flex-1 cursor-pointer items-center"
+    class="relative flex h-full flex-1 items-center"
+    class:cursor-pointer={world.canScrub}
+    class:cursor-not-allowed={!world.canScrub}
     role="slider"
     aria-label="Timeline scrubber"
     aria-valuenow={world.tick}
     aria-valuemin={world.minTick}
     aria-valuemax={world.maxTick}
-    tabindex="0"
+    aria-disabled={!world.canScrub}
+    tabindex={world.canScrub ? 0 : -1}
     onpointerdown={handlePointerDown}
     onpointermove={handlePointerMove}
     onpointerup={handlePointerUp}
+    onpointercancel={handlePointerUp}
   >
     <div class="relative h-1 w-full rounded-full bg-bg-tertiary">
       <div
