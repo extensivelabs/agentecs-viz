@@ -36,7 +36,7 @@
           No errors detected
         </div>
       {:else}
-        {#each sortedErrors as error (error.tick + ':' + error.entity_id + ':' + error.message)}
+        {#each sortedErrors as error, i (error.tick + ':' + error.entity_id + ':' + error.message + ':' + i)}
           <div
             class="flex items-center gap-2 border-t border-bg-tertiary px-4 py-1.5 text-xs"
             class:opacity-50={isPast(error)}

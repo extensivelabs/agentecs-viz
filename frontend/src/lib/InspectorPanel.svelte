@@ -97,7 +97,7 @@
           <div class="mb-1 text-xs font-medium text-error">
             {entityErrors.length} {entityErrors.length === 1 ? "error" : "errors"}
           </div>
-          {#each entityErrors as error (error.tick + ':' + error.message)}
+          {#each entityErrors as error, i (error.tick + ':' + error.message + ':' + i)}
             <div
               class="flex items-center gap-1.5 py-0.5 text-xs"
               class:opacity-50={error.tick < world.tick}

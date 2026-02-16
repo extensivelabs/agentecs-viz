@@ -135,35 +135,43 @@ class TestMockWorldSource:
         finally:
             await source.disconnect()
 
-    async def test_error_generation_over_ticks(self, source: MockWorldSource):
-        """Over many ticks, at least some ErrorEventMessages should be generated."""
+    async def test_error_generation_over_ticks(
+        self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Over many ticks, error events are generated deterministically."""
+        # Force random.random() to always return 0.0 so every tick produces an error
+        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
         await source.connect()
         try:
             await source.send_command("pause")
-            for _ in range(100):
+            for _ in range(10):
                 await source.send_command("step")
 
-            # Check history store has errors (probabilistic, but 100 ticks at 10% should yield some)
-            errors = source.history.get_errors(0, 100)
-            assert len(errors) > 0
+            errors = source.history.get_errors(0, 10)
+            assert len(errors) == 10
             assert all(isinstance(e, ErrorEventMessage) for e in errors)
         finally:
             await source.disconnect()
 
-    async def test_errors_in_event_subscription(self, source: MockWorldSource):
-        """ErrorEventMessages should appear in the event subscription stream."""
+    async def test_errors_in_event_subscription(
+        self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
+    ):
+        """ErrorEventMessages appear in the event subscription stream."""
+        # Force errors on every tick so the assertion is deterministic
+        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
         await source.connect()
         try:
-            events: list[SnapshotMessage | ErrorEventMessage] = []
+            errors: list[ErrorEventMessage] = []
 
             async def collect_events():
                 async for event in source.subscribe():
-                    if isinstance(event, (SnapshotMessage, ErrorEventMessage)):
-                        events.append(event)
-                    if len(events) >= 50:
+                    if isinstance(event, ErrorEventMessage):
+                        errors.append(event)
+                    if len(errors) >= 3:
                         break
 
-            await asyncio.wait_for(collect_events(), timeout=15.0)
-            assert any(isinstance(e, ErrorEventMessage) for e in events) or len(events) >= 50
+            await asyncio.wait_for(collect_events(), timeout=5.0)
+            assert len(errors) >= 3
+            assert all(isinstance(e, ErrorEventMessage) for e in errors)
         finally:
             await source.disconnect()
