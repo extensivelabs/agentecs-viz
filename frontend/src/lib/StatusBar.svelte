@@ -5,7 +5,7 @@
     live: "text-success",
     paused: "text-warning",
     history: "text-accent",
-    replay: "text-entity-agent",
+    replay: "text-accent",
   };
 
   let lastTimestamp = $derived(

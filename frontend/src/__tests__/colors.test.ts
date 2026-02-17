@@ -9,7 +9,7 @@ vi.mock("../lib/state/world.svelte", () => {
   return { world: state };
 });
 
-import { hexToNumber, numberToHex, getArchetypeColor, getArchetypeColorCSS } from "../lib/colors";
+import { hexToNumber, numberToHex, getArchetypeColor, getArchetypeColorCSS, resolveArchetypeColor } from "../lib/colors";
 import { hashString } from "../lib/utils";
 import { world } from "../lib/state/world.svelte";
 import { DEFAULT_COLOR_PALETTE } from "../lib/config";
@@ -113,6 +113,39 @@ describe("colors", () => {
     it("returns hex string", () => {
       const css = getArchetypeColorCSS(["A"]);
       expect(css).toMatch(/^#[0-9a-f]{6}$/);
+    });
+  });
+
+  describe("resolveArchetypeColor (pure)", () => {
+    it("uses config color when present", () => {
+      const configMap = new Map([["A,B", { color: "#ff0000" }]]);
+      expect(resolveArchetypeColor(["A", "B"], configMap)).toBe(0xff0000);
+    });
+
+    it("uses palette when config has no color", () => {
+      const configMap = new Map<string, { color?: string }>();
+      const palette = ["#111111", "#222222", "#333333"];
+      const color = resolveArchetypeColor(["X", "Y"], configMap, palette);
+      expect([0x111111, 0x222222, 0x333333]).toContain(color);
+    });
+
+    it("falls back to DEFAULT_COLOR_PALETTE with empty config", () => {
+      const configMap = new Map<string, { color?: string }>();
+      const color = resolveArchetypeColor(["Foo"], configMap);
+      expect(DEFAULT_COLOR_PALETTE).toContain(color);
+    });
+
+    it("ignores config entry without color field", () => {
+      const configMap = new Map([["A", {}]]);
+      const color = resolveArchetypeColor(["A"], configMap);
+      expect(DEFAULT_COLOR_PALETTE).toContain(color);
+    });
+
+    it("produces deterministic results", () => {
+      const configMap = new Map<string, { color?: string }>();
+      const a = resolveArchetypeColor(["A", "B"], configMap);
+      const b = resolveArchetypeColor(["A", "B"], configMap);
+      expect(a).toBe(b);
     });
   });
 });

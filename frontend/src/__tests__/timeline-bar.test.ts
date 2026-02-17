@@ -44,6 +44,54 @@ function connectWithoutHistory(tick = 5) {
   } satisfies SnapshotMessage);
 }
 
+describe("TimelineState speed edge cases", () => {
+  beforeEach(() => {
+    MockWebSocket.instances = [];
+    vi.stubGlobal("WebSocket", MockWebSocket);
+    timeline.playbackSpeed = 1.0;
+  });
+
+  afterEach(() => {
+    world.disconnect();
+    timeline.playbackSpeed = 1.0;
+    vi.restoreAllMocks();
+  });
+
+  it("nextSpeed finds closest when playbackSpeed not in list", () => {
+    connectWithHistory();
+    // Set speed to a value not in availableSpeeds [0.5, 1, 2, 5, 10]
+    timeline.playbackSpeed = 3;
+    const spy = vi.spyOn(world, "setSpeed");
+
+    timeline.nextSpeed();
+    // Closest to 3 is 2 (idx=2), next is 5 (idx=3)
+    expect(timeline.playbackSpeed).toBe(5);
+    expect(spy).toHaveBeenCalledWith(5);
+  });
+
+  it("prevSpeed finds closest when playbackSpeed not in list", () => {
+    connectWithHistory();
+    timeline.playbackSpeed = 3;
+    const spy = vi.spyOn(world, "setSpeed");
+
+    timeline.prevSpeed();
+    // Closest to 3 is 2 (idx=2), prev is 1 (idx=1)
+    expect(timeline.playbackSpeed).toBe(1);
+    expect(spy).toHaveBeenCalledWith(1);
+  });
+
+  it("prevSpeed does nothing when closest is first speed", () => {
+    connectWithHistory();
+    timeline.playbackSpeed = 0.3;
+    const spy = vi.spyOn(world, "setSpeed");
+
+    timeline.prevSpeed();
+    // Closest to 0.3 is 0.5 (idx=0), no prev available
+    expect(spy).not.toHaveBeenCalled();
+    expect(timeline.playbackSpeed).toBe(0.3);
+  });
+});
+
 describe("TimelineBar", () => {
   beforeEach(() => {
     MockWebSocket.instances = [];

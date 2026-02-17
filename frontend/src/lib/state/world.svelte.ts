@@ -301,6 +301,7 @@ export class WorldState {
       }
 
       case "delta":
+        console.warn("[world] delta message received but not yet implemented");
         break;
     }
   }
