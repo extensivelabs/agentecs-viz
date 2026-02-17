@@ -28,6 +28,24 @@ function stableStringify(value: unknown): string {
   return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`).join(",")}}`;
 }
 
+export function severityLabel(severity: string): string {
+  switch (severity) {
+    case "critical": return "CRIT";
+    case "warning": return "WARN";
+    case "info": return "INFO";
+    default: return severity.toUpperCase();
+  }
+}
+
+export function severityClasses(severity: string): string {
+  switch (severity) {
+    case "critical": return "text-error bg-error/20";
+    case "warning": return "text-warning bg-warning/20";
+    case "info": return "text-accent bg-accent/20";
+    default: return "text-text-muted bg-bg-tertiary";
+  }
+}
+
 export function entityHash(entity: EntitySnapshot): string {
   const sorted = [...entity.components].sort((a, b) =>
     a.type_short.localeCompare(b.type_short),

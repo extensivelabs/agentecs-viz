@@ -1,6 +1,6 @@
 <script lang="ts">
   import { world } from "./state/world.svelte";
-  import { getArchetypeKey, getArchetypeDisplay } from "./utils";
+  import { getArchetypeKey, getArchetypeDisplay, severityLabel, severityClasses } from "./utils";
   import { getArchetypeColorCSS } from "./colors";
   import JsonTree from "./JsonTree.svelte";
   import type { ComponentChanges } from "./diff";
@@ -31,6 +31,13 @@
 
   let statusFields = $derived(world.config?.field_hints?.status_fields ?? []);
   let errorFields = $derived(world.config?.field_hints?.error_fields ?? []);
+
+  let entityErrors = $derived.by(() => {
+    if (!entity) return [];
+    return world.visibleErrors
+      .filter((e) => e.entity_id === entity.id)
+      .sort((a, b) => b.tick - a.tick);
+  });
 
   let diff = $derived(world.selectedEntityDiff);
   let pinnedDiff = $derived(world.selectedEntityPinnedDiff);
@@ -85,6 +92,26 @@
     </div>
 
     <div class="flex-1 overflow-y-auto">
+      {#if entityErrors.length > 0}
+        <div class="border-b border-bg-tertiary px-4 py-2" data-testid="inspector-errors">
+          <div class="mb-1 text-xs font-medium text-error">
+            {entityErrors.length} {entityErrors.length === 1 ? "error" : "errors"}
+          </div>
+          {#each entityErrors as error, i (error.tick + ':' + error.message + ':' + i)}
+            <div
+              class="flex items-center gap-1.5 py-0.5 text-xs"
+              class:opacity-50={error.tick < world.tick}
+            >
+              <span class="shrink-0 rounded px-1 py-0.5 text-[10px] font-medium {severityClasses(error.severity)}">
+                {severityLabel(error.severity)}
+              </span>
+              <span class="font-mono text-text-muted">T{error.tick}</span>
+              <span class="min-w-0 truncate text-text-primary">{error.message}</span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+
       {#if activeDiff && activeDiff.totalChanges > 0}
         <div class="border-b border-bg-tertiary px-4 py-2" data-testid="diff-summary">
           <span class="rounded bg-warning/20 px-1.5 py-0.5 text-xs text-warning">

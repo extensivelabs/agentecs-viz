@@ -15,6 +15,7 @@
     OVERVIEW_DOT_RADIUS,
     SELECTION_RING_COLOR,
     CHANGED_RING_COLOR,
+    ERROR_RING_COLOR,
     MIN_HIT_RADIUS,
     entityRadius,
     adaptiveMaxRadius,
@@ -181,6 +182,18 @@
 
       if (world.changedEntityIds.has(entity.id)) {
         gfx.circle(0, 0, radius + (selectedId === entity.id ? 6 : 3)).stroke({ color: CHANGED_RING_COLOR, width: 1.5 });
+      }
+
+      if (world.errorEntityIds.has(entity.id)) {
+        const hasSelection = selectedId === entity.id;
+        const hasChanged = world.changedEntityIds.has(entity.id);
+        const errorOffset = hasSelection && hasChanged ? 9 : hasSelection || hasChanged ? 6 : 3;
+        gfx.circle(0, 0, radius + errorOffset).stroke({ color: ERROR_RING_COLOR, width: 2 });
+      } else if (world.pastErrorEntityIds.has(entity.id)) {
+        const hasSelection = selectedId === entity.id;
+        const hasChanged = world.changedEntityIds.has(entity.id);
+        const errorOffset = hasSelection && hasChanged ? 9 : hasSelection || hasChanged ? 6 : 3;
+        gfx.circle(0, 0, radius + errorOffset).stroke({ color: 0x666666, width: 1 });
       }
 
       gfx.position.set(pos.x, pos.y);
@@ -368,6 +381,8 @@
     void world.selectedEntityId;
     void world.changedEntityIds;
     void world.entityDiffCounts;
+    void world.errorEntityIds;
+    void world.pastErrorEntityIds;
     void currentViewLevel;
 
     renderEntities();

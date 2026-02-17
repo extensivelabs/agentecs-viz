@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from agentecs_viz.protocol import SnapshotMessage
+from agentecs_viz.protocol import ErrorEventMessage, SnapshotMessage
 from agentecs_viz.sources.mock import MockWorldSource
 
 
@@ -132,5 +132,46 @@ class TestMockWorldSource:
             original_interval = source._tick_interval
             await source.send_command("set_speed", ticks_per_second=True)
             assert source._tick_interval == original_interval
+        finally:
+            await source.disconnect()
+
+    async def test_error_generation_over_ticks(
+        self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Over many ticks, error events are generated deterministically."""
+        # Force random.random() to always return 0.0 so every tick produces an error
+        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
+        await source.connect()
+        try:
+            await source.send_command("pause")
+            for _ in range(10):
+                await source.send_command("step")
+
+            errors = source.history.get_errors(0, 10)
+            assert len(errors) == 10
+            assert all(isinstance(e, ErrorEventMessage) for e in errors)
+        finally:
+            await source.disconnect()
+
+    async def test_errors_in_event_subscription(
+        self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
+    ):
+        """ErrorEventMessages appear in the event subscription stream."""
+        # Force errors on every tick so the assertion is deterministic
+        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
+        await source.connect()
+        try:
+            errors: list[ErrorEventMessage] = []
+
+            async def collect_events():
+                async for event in source.subscribe():
+                    if isinstance(event, ErrorEventMessage):
+                        errors.append(event)
+                    if len(errors) >= 3:
+                        break
+
+            await asyncio.wait_for(collect_events(), timeout=5.0)
+            assert len(errors) >= 3
+            assert all(isinstance(e, ErrorEventMessage) for e in errors)
         finally:
             await source.disconnect()

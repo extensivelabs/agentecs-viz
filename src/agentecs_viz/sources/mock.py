@@ -8,7 +8,7 @@ from typing import Any
 
 from agentecs_viz.config import ArchetypeConfig, VisualizationConfig
 from agentecs_viz.history import InMemoryHistoryStore
-from agentecs_viz.protocol import SnapshotMessage
+from agentecs_viz.protocol import ErrorEventMessage, ErrorSeverity, SnapshotMessage
 from agentecs_viz.snapshot import ComponentSnapshot, EntitySnapshot, WorldSnapshot
 from agentecs_viz.sources._base import TickLoopSource
 
@@ -17,6 +17,18 @@ ENTITY_SPAWN_PROBABILITY = 0.02
 ENTITY_DESPAWN_PROBABILITY = 0.02
 MAX_ENTITY_MULTIPLIER = 1.5
 MIN_ENTITY_COUNT = 10
+ERROR_PROBABILITY = 0.10
+
+ERROR_TEMPLATES: list[tuple[str, ErrorSeverity]] = [
+    ("LLM rate limit exceeded", ErrorSeverity.critical),
+    ("Tool execution failed: timeout", ErrorSeverity.critical),
+    ("Memory limit approaching threshold", ErrorSeverity.warning),
+    ("Task retry count exceeded", ErrorSeverity.warning),
+    ("Stale context detected, refreshing", ErrorSeverity.warning),
+    ("Goal evaluation returned low confidence", ErrorSeverity.info),
+    ("Unexpected API response format", ErrorSeverity.warning),
+    ("Duplicate task assignment detected", ErrorSeverity.info),
+]
 
 
 def _default_archetypes() -> list[tuple[str, ...]]:
@@ -145,6 +157,18 @@ class MockWorldSource(TickLoopSource):
         snapshot = self._build_snapshot()
         self._history.record_tick(snapshot)
         await self._emit_event(SnapshotMessage(tick=self._tick, snapshot=snapshot))
+
+        if self._entities and random.random() < ERROR_PROBABILITY:
+            entity = random.choice(self._entities)
+            message, severity = random.choice(ERROR_TEMPLATES)
+            error = ErrorEventMessage(
+                tick=self._tick,
+                entity_id=entity.id,
+                message=message,
+                severity=severity,
+            )
+            self._history.record_error(error)
+            await self._emit_event(error)
 
     def _build_snapshot(self) -> WorldSnapshot:
         return WorldSnapshot(
