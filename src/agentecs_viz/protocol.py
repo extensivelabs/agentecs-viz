@@ -108,7 +108,7 @@ class SpanEventMessage(BaseModel):
     start_time: float
     end_time: float
     status: SpanStatus = SpanStatus.unset
-    attributes: dict[str, Any] = {}
+    attributes: dict[str, Any] = Field(default_factory=dict)
 
 
 class MetadataMessage(BaseModel):

@@ -291,6 +291,7 @@ class MockWorldSource(TickLoopSource):
 
         entity = random.choice(agent_entities)
         trace_id = uuid.uuid4().hex
+        root_span_id = uuid.uuid4().hex
         now = time.time()
         system_name = random.choice(SYSTEM_NAMES)
 
@@ -332,7 +333,7 @@ class MockWorldSource(TickLoopSource):
             child_span = SpanEventMessage(
                 span_id=uuid.uuid4().hex,
                 trace_id=trace_id,
-                parent_span_id="__root__",
+                parent_span_id=root_span_id,
                 name=span_name,
                 start_time=cursor,
                 end_time=cursor + child_duration,
@@ -346,7 +347,7 @@ class MockWorldSource(TickLoopSource):
         has_error = any(s.status == SpanStatus.error for s in child_spans)
         root_status = SpanStatus.error if has_error else SpanStatus.ok
         root_span = SpanEventMessage(
-            span_id=uuid.uuid4().hex,
+            span_id=root_span_id,
             trace_id=trace_id,
             name=system_name,
             start_time=now,
@@ -358,9 +359,6 @@ class MockWorldSource(TickLoopSource):
                 "agentecs.system": system_name,
             },
         )
-
-        for child in child_spans:
-            child.parent_span_id = root_span.span_id
 
         all_spans = [root_span, *child_spans]
         for span in all_spans:

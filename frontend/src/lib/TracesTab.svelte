@@ -21,9 +21,10 @@
   let spansByTick = $derived.by(() => {
     const grouped = new Map<number, SpanEventMessage[]>();
     for (const span of displaySpans) {
-      const tick = span.attributes["agentecs.tick"] as number;
-      if (!grouped.has(tick)) grouped.set(tick, []);
-      grouped.get(tick)!.push(span);
+      const rawTick = span.attributes["agentecs.tick"];
+      if (typeof rawTick !== "number") continue;
+      if (!grouped.has(rawTick)) grouped.set(rawTick, []);
+      grouped.get(rawTick)!.push(span);
     }
     return [...grouped.entries()].sort((a, b) => b[0] - a[0]);
   });
@@ -78,6 +79,15 @@
     if (ms < 1) return `${(ms * 1000).toFixed(0)}μs`;
     if (ms < 1000) return `${ms.toFixed(0)}ms`;
     return `${(ms / 1000).toFixed(2)}s`;
+  }
+
+  function spanMessages(span: SpanEventMessage): Array<Record<string, string>> {
+    const input = span.attributes["gen_ai.request.messages"];
+    const output = span.attributes["gen_ai.response.messages"];
+    const msgs: Array<Record<string, string>> = [];
+    if (Array.isArray(input)) msgs.push(...(input as Array<Record<string, string>>));
+    if (Array.isArray(output)) msgs.push(...(output as Array<Record<string, string>>));
+    return msgs;
   }
 
   function statusDotColor(status: string): string {
@@ -210,9 +220,10 @@
               </div>
             {/if}
             {#if selectedSpan.attributes["gen_ai.request.messages"]}
+              {@const msgs = spanMessages(selectedSpan)}
               <div class="mt-2">
                 <div class="mb-1 text-[10px] font-medium text-text-muted">Messages</div>
-                {#each (selectedSpan.attributes["gen_ai.request.messages"] as Array<Record<string, string>>).concat(selectedSpan.attributes["gen_ai.response.messages"] as Array<Record<string, string>> ?? []) as msg, i (i)}
+                {#each msgs as msg, i (i)}
                   <div
                     class="mb-1 rounded px-2 py-1 text-xs {msg.role === 'user' ? 'bg-accent/10' : msg.role === 'assistant' ? 'bg-purple-500/10' : 'bg-bg-tertiary'}"
                   >

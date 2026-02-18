@@ -112,9 +112,10 @@ export class WorldState {
   visibleErrorCount: number = $derived(this.visibleErrors.length);
 
   visibleSpans: SpanEventMessage[] = $derived(
-    this.spans.filter(
-      (s) => (s.attributes["agentecs.tick"] as number) <= this.tick,
-    ),
+    this.spans.filter((s) => {
+      const tick = s.attributes["agentecs.tick"];
+      return typeof tick === "number" && tick <= this.tick;
+    }),
   );
 
   selectedEntitySpans: SpanEventMessage[] = $derived(

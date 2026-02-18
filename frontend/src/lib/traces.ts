@@ -17,15 +17,17 @@ export const SPAN_TYPE_COLORS: Record<SpanType, string> = {
 };
 
 export function detectSpanType(attributes: Record<string, unknown>): SpanType {
+  let hasTool = false;
+  let hasRetrieval = false;
+
   for (const key of Object.keys(attributes)) {
     if (key.startsWith("gen_ai.") || key.startsWith("llm.")) return "llm";
+    if (key.startsWith("tool.")) hasTool = true;
+    else if (key.startsWith("retrieval.")) hasRetrieval = true;
   }
-  for (const key of Object.keys(attributes)) {
-    if (key.startsWith("tool.")) return "tool";
-  }
-  for (const key of Object.keys(attributes)) {
-    if (key.startsWith("retrieval.")) return "retrieval";
-  }
+
+  if (hasTool) return "tool";
+  if (hasRetrieval) return "retrieval";
   if (attributes["agentecs.system"]) return "system";
   return "generic";
 }
