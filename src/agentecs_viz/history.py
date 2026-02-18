@@ -7,7 +7,7 @@ from collections import deque
 from collections.abc import Sequence
 from typing import Any
 
-from agentecs_viz.protocol import ErrorEventMessage
+from agentecs_viz.protocol import ErrorEventMessage, SpanEventMessage
 from agentecs_viz.snapshot import (
     ComponentDiff,
     ComponentSnapshot,
@@ -145,6 +145,7 @@ class InMemoryHistoryStore:
         self._checkpoints: dict[int, WorldSnapshot] = {}
         self._deltas: dict[int, TickDelta] = {}
         self._errors: dict[int, list[ErrorEventMessage]] = {}
+        self._spans: dict[int, list[SpanEventMessage]] = {}
         self._tick_order: deque[int] = deque()
         self._last_snapshot: WorldSnapshot | None = None
 
@@ -202,6 +203,28 @@ class InMemoryHistoryStore:
         """Return errors for a specific entity in [start_tick, end_tick] inclusive."""
         return [e for e in self.get_errors(start_tick, end_tick) if e.entity_id == entity_id]
 
+    def record_span(self, span: SpanEventMessage) -> None:
+        """Record a span event at its tick (from attributes)."""
+        tick = span.attributes.get("agentecs.tick", 0)
+        self._spans.setdefault(tick, []).append(span)
+
+    def get_spans(self, start_tick: int, end_tick: int) -> list[SpanEventMessage]:
+        """Return all spans in [start_tick, end_tick] inclusive."""
+        result: list[SpanEventMessage] = []
+        for tick in range(start_tick, end_tick + 1):
+            result.extend(self._spans.get(tick, []))
+        return result
+
+    def get_spans_for_entity(
+        self, entity_id: int, start_tick: int, end_tick: int
+    ) -> list[SpanEventMessage]:
+        """Return spans for a specific entity in [start_tick, end_tick] inclusive."""
+        return [
+            s
+            for s in self.get_spans(start_tick, end_tick)
+            if s.attributes.get("agentecs.entity_id") == entity_id
+        ]
+
     def _evict_oldest(self) -> None:
         """Evict oldest tick, promoting next tick to checkpoint if needed."""
         if not self._tick_order:
@@ -209,6 +232,7 @@ class InMemoryHistoryStore:
 
         old_tick = self._tick_order.popleft()
         self._errors.pop(old_tick, None)
+        self._spans.pop(old_tick, None)
         was_checkpoint = old_tick in self._checkpoints
 
         if was_checkpoint:
@@ -260,6 +284,7 @@ class InMemoryHistoryStore:
         self._checkpoints.clear()
         self._deltas.clear()
         self._errors.clear()
+        self._spans.clear()
         self._tick_order.clear()
         self._last_snapshot = None
 

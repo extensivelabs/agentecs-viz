@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import random
 import time
+import uuid
 from typing import Any
 
 from agentecs_viz.config import ArchetypeConfig, VisualizationConfig
 from agentecs_viz.history import InMemoryHistoryStore
-from agentecs_viz.protocol import ErrorEventMessage, ErrorSeverity, SnapshotMessage
+from agentecs_viz.protocol import (
+    ErrorEventMessage,
+    ErrorSeverity,
+    SnapshotMessage,
+    SpanEventMessage,
+    SpanStatus,
+)
 from agentecs_viz.snapshot import ComponentSnapshot, EntitySnapshot, WorldSnapshot
 from agentecs_viz.sources._base import TickLoopSource
 
@@ -18,6 +25,62 @@ ENTITY_DESPAWN_PROBABILITY = 0.02
 MAX_ENTITY_MULTIPLIER = 1.5
 MIN_ENTITY_COUNT = 10
 ERROR_PROBABILITY = 0.10
+SPAN_PROBABILITY = 0.30
+
+SYSTEM_NAMES = [
+    "MovementSystem",
+    "TaskScheduler",
+    "MemoryConsolidation",
+    "GoalPlanner",
+    "PerceptionSystem",
+]
+
+LLM_MODELS = ["gpt-4o", "claude-sonnet-4-20250514", "gpt-4o-mini"]
+
+LLM_TOKEN_RANGES: list[tuple[tuple[int, int], tuple[int, int]]] = [
+    ((100, 2000), (50, 500)),
+    ((200, 3000), (100, 800)),
+    ((50, 500), (20, 200)),
+]
+
+LLM_MESSAGES: list[tuple[list[dict[str, str]], list[dict[str, str]]]] = [
+    (
+        [
+            {"role": "system", "content": "You are a helpful agent."},
+            {"role": "user", "content": "Analyze the current task."},
+        ],
+        [{"role": "assistant", "content": "I'll analyze the task."}],
+    ),
+    (
+        [
+            {"role": "system", "content": "You are a planning agent."},
+            {"role": "user", "content": "What should we do next?"},
+        ],
+        [{"role": "assistant", "content": "I recommend the following."}],
+    ),
+    (
+        [{"role": "user", "content": "Summarize the results."}],
+        [{"role": "assistant", "content": "Here is a brief summary."}],
+    ),
+]
+
+TOOL_TEMPLATES: list[tuple[str, dict[str, Any], dict[str, Any]]] = [
+    (
+        "web_search",
+        {"query": "latest research on agents"},
+        {"results": [{"title": "Survey", "url": "https://example.com"}]},
+    ),
+    (
+        "code_interpreter",
+        {"code": "import pandas as pd\ndf.describe()"},
+        {"stdout": "count  mean\nval  100  42.5"},
+    ),
+    (
+        "file_read",
+        {"path": "/data/config.json"},
+        {"content": '{"setting": "value"}'},
+    ),
+]
 
 ERROR_TEMPLATES: list[tuple[str, ErrorSeverity]] = [
     ("LLM rate limit exceeded", ErrorSeverity.critical),
@@ -170,6 +233,9 @@ class MockWorldSource(TickLoopSource):
             self._history.record_error(error)
             await self._emit_event(error)
 
+        if self._entities and random.random() < SPAN_PROBABILITY:
+            await self._generate_spans()
+
     def _build_snapshot(self) -> WorldSnapshot:
         return WorldSnapshot(
             tick=self._tick,
@@ -215,6 +281,91 @@ class MockWorldSource(TickLoopSource):
         if gen:
             return gen()  # type: ignore[no-any-return]
         return {"value": random.random()}
+
+    async def _generate_spans(self) -> None:
+        agent_entities = [
+            e for e in self._entities if any(c.type_short == "Agent" for c in e.components)
+        ]
+        if not agent_entities:
+            return
+
+        entity = random.choice(agent_entities)
+        trace_id = uuid.uuid4().hex
+        now = time.time()
+        system_name = random.choice(SYSTEM_NAMES)
+
+        child_count = random.randint(1, 2)
+        child_spans: list[SpanEventMessage] = []
+
+        cursor = now
+        for _ in range(child_count):
+            is_llm = random.random() < 0.6
+            child_duration = random.uniform(0.05, 0.3)
+            child_status = SpanStatus.error if random.random() < 0.1 else SpanStatus.ok
+
+            if is_llm:
+                idx = random.randrange(len(LLM_MODELS))
+                model = LLM_MODELS[idx]
+                prompt_range, comp_range = LLM_TOKEN_RANGES[idx]
+                input_msgs, output_msgs = LLM_MESSAGES[idx]
+                attrs: dict[str, Any] = {
+                    "agentecs.tick": self._tick,
+                    "agentecs.entity_id": entity.id,
+                    "gen_ai.request.model": model,
+                    "gen_ai.usage.prompt_tokens": random.randint(*prompt_range),
+                    "gen_ai.usage.completion_tokens": random.randint(*comp_range),
+                    "gen_ai.request.messages": input_msgs,
+                    "gen_ai.response.messages": output_msgs,
+                }
+                span_name = f"llm.{model}"
+            else:
+                tool_name, tool_input, tool_output = random.choice(TOOL_TEMPLATES)
+                attrs = {
+                    "agentecs.tick": self._tick,
+                    "agentecs.entity_id": entity.id,
+                    "tool.name": tool_name,
+                    "tool.input": tool_input,
+                    "tool.output": tool_output,
+                }
+                span_name = f"tool.{tool_name}"
+
+            child_span = SpanEventMessage(
+                span_id=uuid.uuid4().hex,
+                trace_id=trace_id,
+                parent_span_id="__root__",
+                name=span_name,
+                start_time=cursor,
+                end_time=cursor + child_duration,
+                status=child_status,
+                attributes=attrs,
+            )
+            child_spans.append(child_span)
+            cursor += child_duration + random.uniform(0.01, 0.05)
+
+        total_duration = cursor - now
+        has_error = any(s.status == SpanStatus.error for s in child_spans)
+        root_status = SpanStatus.error if has_error else SpanStatus.ok
+        root_span = SpanEventMessage(
+            span_id=uuid.uuid4().hex,
+            trace_id=trace_id,
+            name=system_name,
+            start_time=now,
+            end_time=now + total_duration,
+            status=root_status,
+            attributes={
+                "agentecs.tick": self._tick,
+                "agentecs.entity_id": entity.id,
+                "agentecs.system": system_name,
+            },
+        )
+
+        for child in child_spans:
+            child.parent_span_id = root_span.span_id
+
+        all_spans = [root_span, *child_spans]
+        for span in all_spans:
+            self._history.record_span(span)
+            await self._emit_event(span)
 
     def _update_entities(self) -> None:
         for entity in self._entities:

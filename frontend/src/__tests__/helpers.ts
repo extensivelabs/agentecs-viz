@@ -2,6 +2,8 @@ import type {
   EntitySnapshot,
   ErrorEventMessage,
   ErrorSeverity,
+  SpanEventMessage,
+  SpanStatus,
   WorldSnapshot,
   VisualizationConfig,
 } from "../lib/types";
@@ -168,6 +170,29 @@ export function makeErrorEvent(
   severity: ErrorSeverity = "warning",
 ): ErrorEventMessage {
   return { type: "error_event", tick, entity_id, message, severity };
+}
+
+
+export function makeSpanEvent(
+  tick: number,
+  entity_id: number,
+  overrides: Partial<SpanEventMessage> = {},
+): SpanEventMessage {
+  return {
+    type: "span_event",
+    span_id: `span_${tick}_${entity_id}`,
+    trace_id: `trace_${tick}`,
+    parent_span_id: null,
+    name: "test.span",
+    start_time: tick * 1.0,
+    end_time: tick * 1.0 + 0.5,
+    status: "unset" as SpanStatus,
+    attributes: {
+      "agentecs.tick": tick,
+      "agentecs.entity_id": entity_id,
+    },
+    ...overrides,
+  };
 }
 
 

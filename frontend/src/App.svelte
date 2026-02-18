@@ -8,6 +8,7 @@
   import EntityView from "./lib/EntityView.svelte";
   import InspectorPanel from "./lib/InspectorPanel.svelte";
   import ErrorPanel from "./lib/ErrorPanel.svelte";
+  import TracesTab from "./lib/TracesTab.svelte";
   import type { Tab } from "./lib/TabBar.svelte";
 
   const baseTabs: Tab[] = [
@@ -110,9 +111,7 @@
           <InspectorPanel />
         </div>
       {:else if activeTab === "traces"}
-        <div class="flex h-full items-center justify-center text-text-muted text-sm">
-          Trace View (REQ-009)
-        </div>
+        <TracesTab />
       {:else if activeTab === "timeline"}
         <div class="flex h-full items-center justify-center text-text-muted text-sm">
           Timeline Analysis (REQ-015)
