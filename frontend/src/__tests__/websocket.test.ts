@@ -96,6 +96,23 @@ describe("WebSocketClient", () => {
     expect(messages).toHaveLength(0);
   });
 
+  it("logs warning on malformed JSON and does not crash", () => {
+    const { messages, callbacks } = setupCallbacks();
+    const client = new WebSocketClient("ws://test/ws", callbacks);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    client.connect();
+    const ws = MockWebSocket.instances[0];
+    ws.simulateOpen();
+
+    ws.simulateRawMessage("not valid json{{{");
+    expect(messages).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[ws] malformed message:",
+      "not valid json{{{",
+    );
+  });
+
   it("sends flat command format", () => {
     const { callbacks } = setupCallbacks();
     const client = new WebSocketClient("ws://test/ws", callbacks);

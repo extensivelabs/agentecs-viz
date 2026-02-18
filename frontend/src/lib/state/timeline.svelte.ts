@@ -10,16 +10,31 @@ export class TimelineState {
   }
 
   nextSpeed(): void {
-    const idx = this.availableSpeeds.indexOf(this.playbackSpeed);
+    let idx = this.availableSpeeds.indexOf(this.playbackSpeed);
+    if (idx === -1) idx = this.findClosestSpeedIndex();
     const next = (idx + 1) % this.availableSpeeds.length;
     this.setSpeed(this.availableSpeeds[next]);
   }
 
   prevSpeed(): void {
-    const idx = this.availableSpeeds.indexOf(this.playbackSpeed);
+    let idx = this.availableSpeeds.indexOf(this.playbackSpeed);
+    if (idx === -1) idx = this.findClosestSpeedIndex();
     if (idx > 0) {
       this.setSpeed(this.availableSpeeds[idx - 1]);
     }
+  }
+
+  private findClosestSpeedIndex(): number {
+    let best = 0;
+    let bestDist = Math.abs(this.availableSpeeds[0] - this.playbackSpeed);
+    for (let i = 1; i < this.availableSpeeds.length; i++) {
+      const dist = Math.abs(this.availableSpeeds[i] - this.playbackSpeed);
+      if (dist < bestDist) {
+        best = i;
+        bestDist = dist;
+      }
+    }
+    return best;
   }
 }
 

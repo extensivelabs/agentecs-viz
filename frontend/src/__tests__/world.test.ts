@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { WorldState } from "../lib/state/world.svelte";
 import type {
+  DeltaMessage,
   MetadataMessage,
   SnapshotMessage,
   ErrorMessage,
@@ -109,6 +110,19 @@ describe("WorldState", () => {
       MockWebSocket.instances[0].simulateMessage(msg);
 
       expect(state.lastError).toBe("something broke");
+    });
+
+    it("logs warning on delta message", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const msg: DeltaMessage = {
+        type: "delta",
+        tick: 1,
+        delta: { spawned: [], destroyed: [], modified: [] },
+      };
+      MockWebSocket.instances[0].simulateMessage(msg);
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[world] delta message received but not yet implemented",
+      );
     });
 
     it("handles tick_update message", () => {

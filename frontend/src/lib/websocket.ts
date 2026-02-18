@@ -66,7 +66,7 @@ export class WebSocketClient {
           this.callbacks.onMessage(data);
         }
       } catch {
-        // ignore malformed messages
+        console.warn("[ws] malformed message:", event.data);
       }
     };
 

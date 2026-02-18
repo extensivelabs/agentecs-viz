@@ -53,6 +53,10 @@ export class MockWebSocket {
     );
   }
 
+  simulateRawMessage(raw: string): void {
+    this.onmessage?.(new MessageEvent("message", { data: raw }));
+  }
+
   simulateError(): void {
     this.onerror?.(new Event("error"));
   }
