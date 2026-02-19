@@ -10,6 +10,8 @@ from agentecs_viz.protocol import (
     SeekCommand,
     SetSpeedCommand,
     SnapshotMessage,
+    SpanEventMessage,
+    SpanStatus,
     StepCommand,
     SubscribeCommand,
     TickUpdateMessage,
@@ -146,6 +148,62 @@ class TestWorldStateSourceProtocol:
         assert WorldStateSource.visualization_config.fget(None) is None  # type: ignore[arg-type]
 
 
+class TestSpanEventMessage:
+    def test_creation(self):
+        msg = SpanEventMessage(
+            span_id="abc123",
+            trace_id="trace456",
+            name="llm.call",
+            start_time=1000.0,
+            end_time=1000.5,
+            attributes={"agentecs.tick": 5, "agentecs.entity_id": 42},
+        )
+        assert msg.type == "span_event"
+        assert msg.span_id == "abc123"
+        assert msg.trace_id == "trace456"
+        assert msg.parent_span_id is None
+        assert msg.name == "llm.call"
+        assert msg.attributes["agentecs.tick"] == 5
+
+    def test_default_status(self):
+        msg = SpanEventMessage(span_id="a", trace_id="b", name="test", start_time=0, end_time=1)
+        assert msg.status == SpanStatus.unset
+
+    def test_explicit_status(self):
+        msg = SpanEventMessage(
+            span_id="a",
+            trace_id="b",
+            name="test",
+            start_time=0,
+            end_time=1,
+            status=SpanStatus.error,
+        )
+        assert msg.status == SpanStatus.error
+
+    def test_roundtrip_serialization(self):
+        msg = SpanEventMessage(
+            span_id="s1",
+            trace_id="t1",
+            parent_span_id="p1",
+            name="tool.call",
+            start_time=100.0,
+            end_time=100.3,
+            status=SpanStatus.ok,
+            attributes={"tool.name": "web_search"},
+        )
+        data = msg.model_dump()
+        restored = SpanEventMessage.model_validate(data)
+        assert restored.span_id == "s1"
+        assert restored.parent_span_id == "p1"
+        assert restored.status == SpanStatus.ok
+        assert restored.attributes["tool.name"] == "web_search"
+
+    def test_status_enum_values(self):
+        assert SpanStatus.ok == "ok"
+        assert SpanStatus.error == "error"
+        assert SpanStatus.unset == "unset"
+
+
 class TestAnyServerEvent:
     def test_union_contains_all_message_types(self):
         expected = {
@@ -153,6 +211,7 @@ class TestAnyServerEvent:
             DeltaMessage,
             ErrorMessage,
             ErrorEventMessage,
+            SpanEventMessage,
             TickUpdateMessage,
             MetadataMessage,
         }

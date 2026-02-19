@@ -5,6 +5,8 @@
   import JsonTree from "./JsonTree.svelte";
   import type { ComponentChanges } from "./diff";
 
+  let entitySpanCount = $derived(world.selectedEntitySpans.length);
+
   let expandedSections = $state<Record<string, boolean>>({});
 
   let entity = $derived(world.selectedEntity);
@@ -188,8 +190,12 @@
         </div>
       {/each}
 
-      <div class="px-4 py-3" data-testid="systems-placeholder">
-        <div class="text-xs text-text-muted/50">Systems (Phase 2)</div>
+      <div class="px-4 py-3" data-testid="traces-section">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-text-muted">
+            {entitySpanCount} {entitySpanCount === 1 ? "span" : "spans"}
+          </span>
+        </div>
       </div>
     </div>
   {:else}

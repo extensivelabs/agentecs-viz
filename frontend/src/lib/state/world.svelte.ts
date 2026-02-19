@@ -6,6 +6,7 @@ import type {
   EntitySnapshot,
   ErrorEventMessage,
   ServerMessage,
+  SpanEventMessage,
   VisualizationConfig,
   WorldSnapshot,
 } from "../types";
@@ -30,6 +31,9 @@ export class WorldState {
 
   errors: ErrorEventMessage[] = $state([]);
   errorPanelOpen: boolean = $state(false);
+
+  spans: SpanEventMessage[] = $state([]);
+  selectedSpanId: string | null = $state(null);
 
   previousSnapshot: WorldSnapshot | null = $state(null);
   pinnedEntityState: Map<number, EntitySnapshot> | null = $state(null);
@@ -107,6 +111,29 @@ export class WorldState {
 
   visibleErrorCount: number = $derived(this.visibleErrors.length);
 
+  visibleSpans: SpanEventMessage[] = $derived(
+    this.spans.filter((s) => {
+      const tick = s.attributes["agentecs.tick"];
+      return typeof tick === "number" && tick <= this.tick;
+    }),
+  );
+
+  selectedEntitySpans: SpanEventMessage[] = $derived(
+    this.selectedEntityId !== null
+      ? this.visibleSpans.filter(
+          (s) => s.attributes["agentecs.entity_id"] === this.selectedEntityId,
+        )
+      : [],
+  );
+
+  selectedSpan: SpanEventMessage | undefined = $derived(
+    this.selectedSpanId !== null
+      ? this.visibleSpans.find((s) => s.span_id === this.selectedSpanId)
+      : undefined,
+  );
+
+  spanCount: number = $derived(this.visibleSpans.length);
+
   selectedEntityDiff: EntityDiff | null = $derived.by(() => {
     if (!this.selectedEntity || !this.previousSnapshot) return null;
     const prev = this.previousSnapshot.entities.find(
@@ -171,6 +198,8 @@ export class WorldState {
           this.selectedEntityId = null;
           this.errors = [];
           this.errorPanelOpen = false;
+          this.spans = [];
+          this.selectedSpanId = null;
         }
       },
       onError: (err) => {
@@ -240,6 +269,10 @@ export class WorldState {
     this.errorPanelOpen = !this.errorPanelOpen;
   }
 
+  selectSpan(id: string | null): void {
+    this.selectedSpanId = id;
+  }
+
   jumpToError(error: ErrorEventMessage): void {
     this.seek(error.tick);
     this.selectEntity(error.entity_id);
@@ -297,6 +330,13 @@ export class WorldState {
       case "error_event": {
         const updated = [...this.errors, msg];
         this.errors = updated.length > 1000 ? updated.slice(-1000) : updated;
+        break;
+      }
+
+      case "span_event": {
+        const updatedSpans = [...this.spans, msg];
+        this.spans =
+          updatedSpans.length > 2000 ? updatedSpans.slice(-2000) : updatedSpans;
         break;
       }
 

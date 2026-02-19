@@ -81,11 +81,26 @@ export interface MetadataMessage {
   is_paused: boolean;
 }
 
+export type SpanStatus = "ok" | "error" | "unset";
+
+export interface SpanEventMessage {
+  type: "span_event";
+  span_id: string;
+  trace_id: string;
+  parent_span_id: string | null;
+  name: string;
+  start_time: number;
+  end_time: number;
+  status: SpanStatus;
+  attributes: Record<string, unknown>;
+}
+
 export type ServerMessage =
   | SnapshotMessage
   | DeltaMessage
   | ErrorMessage
   | ErrorEventMessage
+  | SpanEventMessage
   | TickUpdateMessage
   | MetadataMessage;
 
@@ -144,6 +159,7 @@ const SERVER_MESSAGE_TYPES = new Set([
   "delta",
   "error",
   "error_event",
+  "span_event",
   "tick_update",
   "metadata",
 ]);

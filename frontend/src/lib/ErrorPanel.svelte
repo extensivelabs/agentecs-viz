@@ -60,9 +60,9 @@
                 data-testid="error-entity"
               >Entity</button>
               <button
-                class="rounded px-1.5 py-0.5 text-[10px] text-text-muted/50 cursor-not-allowed"
-                disabled
-                title="Available after REQ-009"
+                class="rounded px-1.5 py-0.5 text-[10px] text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
+                onclick={() => world.selectEntity(error.entity_id)}
+                data-testid="error-trace"
               >Trace</button>
             </div>
           </div>

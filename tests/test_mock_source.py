@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from agentecs_viz.protocol import ErrorEventMessage, SnapshotMessage
+from agentecs_viz.protocol import ErrorEventMessage, SnapshotMessage, SpanEventMessage
 from agentecs_viz.sources.mock import MockWorldSource
 
 
@@ -173,5 +173,85 @@ class TestMockWorldSource:
             await asyncio.wait_for(collect_events(), timeout=5.0)
             assert len(errors) >= 3
             assert all(isinstance(e, ErrorEventMessage) for e in errors)
+        finally:
+            await source.disconnect()
+
+    async def test_span_generation(self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch):
+        """Over many ticks with forced span generation, spans are created."""
+        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
+        await source.connect()
+        try:
+            await source.send_command("pause")
+            for _ in range(5):
+                await source.send_command("step")
+
+            spans = source.history.get_spans(0, 5)
+            assert len(spans) > 0
+            assert all(isinstance(s, SpanEventMessage) for s in spans)
+        finally:
+            await source.disconnect()
+
+    async def test_span_has_required_attributes(
+        self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Generated spans have agentecs.tick and agentecs.entity_id attributes."""
+        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
+        await source.connect()
+        try:
+            await source.send_command("pause")
+            await source.send_command("step")
+
+            spans = source.history.get_spans(1, 1)
+            assert len(spans) > 0
+            for span in spans:
+                assert "agentecs.tick" in span.attributes
+                assert "agentecs.entity_id" in span.attributes
+                assert span.attributes["agentecs.tick"] == 1
+        finally:
+            await source.disconnect()
+
+    async def test_span_trace_hierarchy(
+        self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Generated spans form parent-child hierarchy with shared trace_id."""
+        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
+        await source.connect()
+        try:
+            await source.send_command("pause")
+            await source.send_command("step")
+
+            spans = source.history.get_spans(1, 1)
+            assert len(spans) >= 2
+
+            root_spans = [s for s in spans if s.parent_span_id is None]
+            child_spans = [s for s in spans if s.parent_span_id is not None]
+            assert len(root_spans) >= 1
+            assert len(child_spans) >= 1
+
+            root = root_spans[0]
+            for child in child_spans:
+                if child.trace_id == root.trace_id:
+                    assert child.parent_span_id == root.span_id
+        finally:
+            await source.disconnect()
+
+    async def test_spans_in_event_stream(
+        self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
+    ):
+        """SpanEventMessages appear in the event subscription stream."""
+        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
+        await source.connect()
+        try:
+            spans: list[SpanEventMessage] = []
+
+            async def collect_events():
+                async for event in source.subscribe():
+                    if isinstance(event, SpanEventMessage):
+                        spans.append(event)
+                    if len(spans) >= 3:
+                        break
+
+            await asyncio.wait_for(collect_events(), timeout=5.0)
+            assert len(spans) >= 3
         finally:
             await source.disconnect()

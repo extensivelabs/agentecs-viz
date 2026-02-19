@@ -7,7 +7,7 @@ from agentecs_viz.history import (
     _diff_entity,
     compute_entity_lifecycles,
 )
-from agentecs_viz.protocol import ErrorEventMessage, ErrorSeverity
+from agentecs_viz.protocol import ErrorEventMessage, ErrorSeverity, SpanEventMessage, SpanStatus
 from agentecs_viz.snapshot import ComponentDiff, TickDelta
 
 
@@ -291,3 +291,73 @@ class TestComputeEntityLifecycles:
     def test_empty_store(self):
         store = InMemoryHistoryStore()
         assert compute_entity_lifecycles(store) == []
+
+
+class TestSpanStorage:
+    def _make_span(
+        self,
+        tick: int,
+        entity_id: int,
+        span_id: str = "s1",
+        trace_id: str = "t1",
+        status: SpanStatus = SpanStatus.unset,
+    ) -> SpanEventMessage:
+        return SpanEventMessage(
+            span_id=span_id,
+            trace_id=trace_id,
+            name=f"span at tick {tick}",
+            start_time=float(tick),
+            end_time=float(tick) + 0.5,
+            status=status,
+            attributes={"agentecs.tick": tick, "agentecs.entity_id": entity_id},
+        )
+
+    def test_record_and_retrieve(self):
+        store = InMemoryHistoryStore()
+        store.record_tick(make_snapshot(0, [make_entity(1, A={})]))
+        span = self._make_span(0, 1)
+        store.record_span(span)
+        spans = store.get_spans(0, 0)
+        assert len(spans) == 1
+        assert spans[0].span_id == "s1"
+
+    def test_range_query(self):
+        store = InMemoryHistoryStore()
+        for i in range(5):
+            store.record_tick(make_snapshot(i, [make_entity(1, A={})]))
+        store.record_span(self._make_span(1, 1, span_id="a"))
+        store.record_span(self._make_span(3, 1, span_id="b"))
+        store.record_span(self._make_span(4, 1, span_id="c"))
+
+        spans = store.get_spans(0, 2)
+        assert len(spans) == 1
+        spans = store.get_spans(0, 4)
+        assert len(spans) == 3
+
+    def test_entity_filtering(self):
+        store = InMemoryHistoryStore()
+        store.record_tick(make_snapshot(0, [make_entity(1, A={}), make_entity(2, B={})]))
+        store.record_span(self._make_span(0, 1, span_id="a"))
+        store.record_span(self._make_span(0, 2, span_id="b"))
+
+        spans = store.get_spans_for_entity(1, 0, 0)
+        assert len(spans) == 1
+        assert spans[0].attributes["agentecs.entity_id"] == 1
+
+    def test_eviction_clears_spans(self):
+        store = InMemoryHistoryStore(max_ticks=3, checkpoint_interval=5)
+        for i in range(5):
+            store.record_tick(make_snapshot(i, [make_entity(1, A={})]))
+            store.record_span(self._make_span(i, 1, span_id=f"s{i}"))
+
+        spans = store.get_spans(0, 1)
+        assert len(spans) == 0
+        spans = store.get_spans(2, 4)
+        assert len(spans) == 3
+
+    def test_clear_removes_spans(self):
+        store = InMemoryHistoryStore()
+        store.record_tick(make_snapshot(0, [make_entity(1, A={})]))
+        store.record_span(self._make_span(0, 1))
+        store.clear()
+        assert store.get_spans(0, 0) == []

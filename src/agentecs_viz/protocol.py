@@ -93,6 +93,24 @@ class ErrorEventMessage(BaseModel):
     severity: ErrorSeverity = ErrorSeverity.warning
 
 
+class SpanStatus(StrEnum):
+    ok = "ok"
+    error = "error"
+    unset = "unset"
+
+
+class SpanEventMessage(BaseModel):
+    type: Literal["span_event"] = "span_event"
+    span_id: str
+    trace_id: str
+    parent_span_id: str | None = None
+    name: str
+    start_time: float
+    end_time: float
+    status: SpanStatus = SpanStatus.unset
+    attributes: dict[str, Any] = Field(default_factory=dict)
+
+
 class MetadataMessage(BaseModel):
     """Sent on WebSocket connection with initial state and capabilities."""
 
@@ -109,6 +127,7 @@ AnyServerEvent = (
     | DeltaMessage
     | ErrorMessage
     | ErrorEventMessage
+    | SpanEventMessage
     | TickUpdateMessage
     | MetadataMessage
 )

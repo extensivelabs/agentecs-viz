@@ -87,15 +87,15 @@ describe("InspectorPanel", () => {
     expect(container.textContent).not.toContain("x:");
   });
 
-  it("shows systems placeholder", () => {
+  it("shows traces section", () => {
     const entity = makeEntity(1, [{ type_short: "A", data: {} }]);
     setWorldState([entity]);
     world.selectEntity(1);
 
     const { container } = render(InspectorPanel);
-    const placeholder = container.querySelector("[data-testid='systems-placeholder']");
-    expect(placeholder).toBeTruthy();
-    expect(placeholder!.textContent).toContain("Systems (Phase 2)");
+    const section = container.querySelector("[data-testid='traces-section']");
+    expect(section).toBeTruthy();
+    expect(section!.textContent).toContain("spans");
   });
 
   it("shows close button that deselects entity", async () => {

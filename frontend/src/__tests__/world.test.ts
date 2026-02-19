@@ -6,9 +6,10 @@ import type {
   SnapshotMessage,
   ErrorMessage,
   ErrorEventMessage,
+  SpanEventMessage,
   TickUpdateMessage,
 } from "../lib/types";
-import { MockWebSocket, makeSnapshot, makeConfig, makeErrorEvent } from "./helpers";
+import { MockWebSocket, makeSnapshot, makeConfig, makeErrorEvent, makeSpanEvent } from "./helpers";
 
 describe("WorldState", () => {
   let state: WorldState;
@@ -643,6 +644,111 @@ describe("WorldState", () => {
       expect(state.errorPanelOpen).toBe(true);
       state.toggleErrorPanel();
       expect(state.errorPanelOpen).toBe(false);
+    });
+  });
+
+  describe("span tracking", () => {
+    beforeEach(() => {
+      state.connect("ws://test/ws");
+      MockWebSocket.instances[0].simulateOpen();
+    });
+
+    it("accumulates span events", () => {
+      const snapshot = makeSnapshot({ tick: 3 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 3,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      MockWebSocket.instances[0].simulateMessage(makeSpanEvent(1, 1));
+      MockWebSocket.instances[0].simulateMessage(makeSpanEvent(2, 2));
+      MockWebSocket.instances[0].simulateMessage(makeSpanEvent(3, 1));
+
+      expect(state.spans).toHaveLength(3);
+    });
+
+    it("caps spans at 2000", () => {
+      const snapshot = makeSnapshot({ tick: 3000 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 3000,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      // Pre-fill with 1999 spans via direct assignment
+      const bulk: SpanEventMessage[] = [];
+      for (let i = 0; i < 1999; i++) {
+        bulk.push(makeSpanEvent(i, 1, { span_id: `s${i}` }));
+      }
+      state.spans = bulk;
+
+      // Send 2 more to trigger cap logic
+      MockWebSocket.instances[0].simulateMessage(makeSpanEvent(1999, 1, { span_id: "s1999" }));
+      MockWebSocket.instances[0].simulateMessage(makeSpanEvent(2000, 1, { span_id: "s2000" }));
+
+      expect(state.spans).toHaveLength(2000);
+      expect(state.spans[0].span_id).toBe("s1");
+    });
+
+    it("visibleSpans filters by current tick", () => {
+      const snapshot = makeSnapshot({ tick: 2 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 2,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      MockWebSocket.instances[0].simulateMessage(makeSpanEvent(1, 1));
+      MockWebSocket.instances[0].simulateMessage(makeSpanEvent(2, 2));
+      MockWebSocket.instances[0].simulateMessage(makeSpanEvent(5, 1));
+
+      expect(state.visibleSpans).toHaveLength(2);
+      expect(state.spanCount).toBe(2);
+    });
+
+    it("selectedEntitySpans filters by entity", () => {
+      const snapshot = makeSnapshot({ tick: 5 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 5,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      MockWebSocket.instances[0].simulateMessage(makeSpanEvent(1, 1));
+      MockWebSocket.instances[0].simulateMessage(makeSpanEvent(2, 2));
+      MockWebSocket.instances[0].simulateMessage(makeSpanEvent(3, 1));
+
+      state.selectEntity(1);
+      expect(state.selectedEntitySpans).toHaveLength(2);
+    });
+
+    it("selectSpan sets selectedSpanId and selectedSpan", () => {
+      const snapshot = makeSnapshot({ tick: 5 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 5,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      const span = makeSpanEvent(1, 1, { span_id: "target" });
+      MockWebSocket.instances[0].simulateMessage(span);
+
+      state.selectSpan("target");
+      expect(state.selectedSpanId).toBe("target");
+      expect(state.selectedSpan?.span_id).toBe("target");
+
+      state.selectSpan(null);
+      expect(state.selectedSpan).toBeUndefined();
+    });
+
+    it("clears spans on disconnect", () => {
+      MockWebSocket.instances[0].simulateMessage(makeSpanEvent(1, 1));
+      expect(state.spans).toHaveLength(1);
+
+      state.disconnect();
+      expect(state.spans).toHaveLength(0);
+      expect(state.selectedSpanId).toBeNull();
     });
   });
 });
