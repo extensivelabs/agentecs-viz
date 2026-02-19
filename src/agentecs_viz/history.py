@@ -205,7 +205,8 @@ class InMemoryHistoryStore:
 
     def record_span(self, span: SpanEventMessage) -> None:
         """Record a span event at its tick (from attributes)."""
-        tick = span.attributes.get("agentecs.tick", 0)
+        raw_tick = span.attributes.get("agentecs.tick", 0)
+        tick = int(raw_tick) if isinstance(raw_tick, int | float) else 0
         self._spans.setdefault(tick, []).append(span)
 
     def get_spans(self, start_tick: int, end_tick: int) -> list[SpanEventMessage]:

@@ -95,7 +95,7 @@ describe("InspectorPanel", () => {
     const { container } = render(InspectorPanel);
     const section = container.querySelector("[data-testid='traces-section']");
     expect(section).toBeTruthy();
-    expect(section!.textContent).toContain("traces");
+    expect(section!.textContent).toContain("spans");
   });
 
   it("shows close button that deselects entity", async () => {

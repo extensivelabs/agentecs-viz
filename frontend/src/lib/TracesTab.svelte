@@ -141,7 +141,7 @@
             {@const isSelected = node.span.span_id === world.selectedSpanId}
             <button
               class="flex w-full items-center gap-2 px-4 py-1 text-left text-xs hover:bg-bg-tertiary/50 {isSelected ? 'bg-accent/10' : ''}"
-              style:padding-left="{16 + node.depth * 16}px"
+              style:padding-left={`${16 + node.depth * 16}px`}
               onclick={() => world.selectSpan(node.span.span_id)}
               data-testid="span-row"
             >

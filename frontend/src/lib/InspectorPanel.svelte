@@ -193,7 +193,7 @@
       <div class="px-4 py-3" data-testid="traces-section">
         <div class="flex items-center gap-2">
           <span class="text-xs text-text-muted">
-            {entitySpanCount} {entitySpanCount === 1 ? "trace" : "traces"}
+            {entitySpanCount} {entitySpanCount === 1 ? "span" : "spans"}
           </span>
         </div>
       </div>

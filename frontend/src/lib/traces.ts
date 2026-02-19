@@ -45,15 +45,16 @@ export function getTokenCounts(attributes: Record<string, unknown>): {
   completion: number | null;
   total: number | null;
 } {
-  const prompt =
-    (attributes["gen_ai.usage.prompt_tokens"] as number | undefined) ??
-    (attributes["llm.usage.prompt_tokens"] as number | undefined) ??
-    null;
-  const completion =
-    (attributes["gen_ai.usage.completion_tokens"] as number | undefined) ??
-    (attributes["llm.usage.completion_tokens"] as number | undefined) ??
-    null;
-  const total = prompt !== null && completion !== null ? prompt + completion : null;
+  const promptAttr =
+    attributes["gen_ai.usage.prompt_tokens"] ??
+    attributes["llm.usage.prompt_tokens"];
+  const completionAttr =
+    attributes["gen_ai.usage.completion_tokens"] ??
+    attributes["llm.usage.completion_tokens"];
+  const prompt = typeof promptAttr === "number" ? promptAttr : null;
+  const completion = typeof completionAttr === "number" ? completionAttr : null;
+  const total =
+    prompt !== null && completion !== null ? prompt + completion : null;
   return { prompt, completion, total };
 }
 
