@@ -225,8 +225,11 @@ export class WorldState {
 
   disconnect(): void {
     this.stopReplay();
-    this.client?.disconnect();
+    const client = this.client;
     this.client = null;
+    this.connectionState = "disconnected";
+    this.resetState();
+    client?.disconnect();
   }
 
   pause(): void {

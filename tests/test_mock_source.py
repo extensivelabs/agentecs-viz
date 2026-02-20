@@ -144,6 +144,7 @@ class TestMockWorldSource:
                 await source.send_command("step")
             assert source.get_current_tick() == 5
             assert source.history.tick_count > 0
+            assert source.is_paused is True
         finally:
             await source.disconnect()
 
@@ -151,6 +152,7 @@ class TestMockWorldSource:
         await source.connect()
         try:
             assert source.get_current_tick() == 0
+            assert source.is_paused is False
             assert source.history.tick_count == 1  # only tick 0
             tick_range = source.tick_range
             assert tick_range is not None

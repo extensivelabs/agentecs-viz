@@ -184,6 +184,7 @@ class MockWorldSource(TickLoopSource):
 
     async def _on_connect(self) -> None:
         self._tick = 0
+        self._paused = False
         self._history.clear()
         self._entities = self._generate_entities()
         snapshot = self._build_snapshot()

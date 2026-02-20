@@ -86,23 +86,26 @@ class TestWebSocket:
             ws.send_json({"command": "pause"})
             ws.receive_json()  # tick_update ack for pause
 
+            max_drain = 20  # bound to prevent hangs if protocol changes
             for _ in range(5):
                 ws.send_json({"command": "step"})
-                # Drain all messages until we see the snapshot for this step
                 seen_tick_update = False
                 seen_snapshot = False
-                while not (seen_tick_update and seen_snapshot):
+                for _ in range(max_drain):
                     msg = ws.receive_json()
                     if msg["type"] == "tick_update":
                         seen_tick_update = True
                     elif msg["type"] == "snapshot":
                         seen_snapshot = True
-                    # error_event and span_event are silently consumed
+                    if seen_tick_update and seen_snapshot:
+                        break
+                assert seen_tick_update and seen_snapshot, "step did not produce expected messages"
 
             ws.send_json({"command": "seek", "tick": 1})
-            # Drain until we get the snapshot response for our seek
-            while True:
+            resp = None
+            for _ in range(max_drain):
                 resp = ws.receive_json()
                 if resp["type"] == "snapshot":
                     break
+            assert resp is not None and resp["type"] == "snapshot", "seek did not produce snapshot"
             assert resp["tick"] == 1
