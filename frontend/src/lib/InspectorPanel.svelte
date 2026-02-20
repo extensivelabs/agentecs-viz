@@ -1,6 +1,13 @@
 <script lang="ts">
   import { world } from "./state/world.svelte";
-  import { getArchetypeKey, getArchetypeDisplay, severityLabel, severityClasses } from "./utils";
+  import {
+    formatCostUsd,
+    formatTokens,
+    getArchetypeKey,
+    getArchetypeDisplay,
+    severityLabel,
+    severityClasses,
+  } from "./utils";
   import { getArchetypeColorCSS } from "./colors";
   import JsonTree from "./JsonTree.svelte";
   import type { ComponentChanges } from "./diff";
@@ -68,14 +75,6 @@
     world.selectEntity(null);
   }
 
-  function formatTokens(count: number): string {
-    return count.toLocaleString();
-  }
-
-  function formatCost(costUsd: number): string {
-    if (costUsd >= 1) return `$${costUsd.toFixed(2)}`;
-    return `$${costUsd.toFixed(4)}`;
-  }
 </script>
 
 <aside
@@ -211,7 +210,7 @@
           <span class="text-text-secondary">{formatTokens(entityTokenUsage.total)}</span>
           <span> tokens</span>
           <span class="mx-1 text-text-muted/60">|</span>
-          <span class="text-text-secondary">{formatCost(entityTokenUsage.costUsd)}</span>
+          <span class="text-text-secondary">{formatCostUsd(entityTokenUsage.costUsd)}</span>
           <span> cost</span>
         </div>
         {#if entityModelTokenUsage.length > 0}
@@ -220,7 +219,7 @@
               <div class="flex items-center justify-between text-xs">
                 <span class="truncate text-text-secondary">{modelUsage.model}</span>
                 <span class="font-mono text-text-muted">
-                  {formatTokens(modelUsage.total)} / {formatCost(modelUsage.costUsd)}
+                  {formatTokens(modelUsage.total)} / {formatCostUsd(modelUsage.costUsd)}
                 </span>
               </div>
             {/each}
