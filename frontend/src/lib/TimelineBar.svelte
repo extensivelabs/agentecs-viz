@@ -80,6 +80,11 @@
       ? ((world.tick - world.minTick) / (world.maxTick - world.minTick)) * 100
       : 0,
   );
+
+  let tickDisplayWidth = $derived.by(() => {
+    const maxDigits = String(world.maxTick).length;
+    return maxDigits * 2 + 3; // worst-case width: maxDigits per number + 3 for " / "
+  });
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -93,7 +98,7 @@
     <button
       class="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-bg-tertiary hover:text-text-primary disabled:opacity-30 disabled:pointer-events-none"
       onclick={() => world.stepBack()}
-      disabled={!world.canScrub || world.tick <= world.minTick}
+      disabled={!world.canScrub || world.tick <= world.minTick || world.isReplayPlaying}
       aria-label="Step back"
     >
       <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -104,10 +109,10 @@
     <button
       class="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
       onclick={() => world.togglePause()}
-      aria-label={world.isPaused ? "Play" : "Pause"}
+      aria-label={world.isPaused && !world.isReplayPlaying ? "Play" : "Pause"}
     >
       <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-        {#if world.isPaused}
+        {#if world.isPaused && !world.isReplayPlaying}
           <path d="M8 5v14l11-7z" />
         {:else}
           <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
@@ -116,8 +121,9 @@
     </button>
 
     <button
-      class="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
+      class="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-bg-tertiary hover:text-text-primary disabled:opacity-30 disabled:pointer-events-none"
       onclick={() => world.step()}
+      disabled={world.isReplayPlaying}
       aria-label="Step forward"
     >
       <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -128,8 +134,39 @@
 
   <span class="text-text-muted">|</span>
 
+  <button
+    class="rounded px-1.5 py-0.5 text-xs font-medium text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
+    onclick={() => timeline.nextSpeed()}
+    aria-label="Playback speed"
+    data-testid="speed-button"
+  >
+    {timeline.playbackSpeed}x
+  </button>
+
+  <span class="flex items-center gap-1.5 text-xs font-medium {modeColors[world.playbackMode] ?? 'text-text-muted'}" data-testid="mode-indicator">
+    {#if world.playbackMode === "live"}
+      <span class="relative flex h-2 w-2">
+        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75"></span>
+        <span class="relative inline-flex h-2 w-2 rounded-full bg-success"></span>
+      </span>
+    {/if}
+    {modeLabels[world.playbackMode] ?? world.playbackMode.toUpperCase()}
+  </span>
+
+  {#if !world.isAtLive && world.supportsHistory}
+    <button
+      class="rounded bg-accent/20 px-2 py-0.5 text-xs font-semibold text-accent hover:bg-accent/30"
+      onclick={() => world.goToLive()}
+      aria-label="Go to live"
+    >
+      LIVE
+    </button>
+  {/if}
+
+  <span class="text-text-muted">|</span>
+
   <div
-    class="relative flex h-full flex-1 items-center"
+    class="relative flex h-full flex-1 items-center overflow-hidden px-1.5"
     class:cursor-pointer={world.canScrub}
     class:cursor-not-allowed={!world.canScrub}
     role="slider"
@@ -157,42 +194,7 @@
     </div>
   </div>
 
-  <span class="text-text-muted">|</span>
-
-  <span class="whitespace-nowrap text-xs text-text-secondary" style="font-variant-numeric: tabular-nums" data-testid="tick-display">
+  <span class="whitespace-nowrap text-right text-xs text-text-secondary" style="font-variant-numeric: tabular-nums; min-width: {tickDisplayWidth}ch" data-testid="tick-display">
     {world.tick} / {world.maxTick}
   </span>
-
-  <span class="text-text-muted">|</span>
-
-  <button
-    class="rounded px-1.5 py-0.5 text-xs font-medium text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
-    onclick={() => timeline.nextSpeed()}
-    aria-label="Playback speed"
-    data-testid="speed-button"
-  >
-    {timeline.playbackSpeed}x
-  </button>
-
-  <span class="text-text-muted">|</span>
-
-  <span class="flex items-center gap-1.5 text-xs font-medium {modeColors[world.playbackMode] ?? 'text-text-muted'}" data-testid="mode-indicator">
-    {#if world.playbackMode === "live"}
-      <span class="relative flex h-2 w-2">
-        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75"></span>
-        <span class="relative inline-flex h-2 w-2 rounded-full bg-success"></span>
-      </span>
-    {/if}
-    {modeLabels[world.playbackMode] ?? world.playbackMode.toUpperCase()}
-  </span>
-
-  {#if !world.isAtLive && world.supportsHistory}
-    <button
-      class="rounded bg-accent/20 px-2 py-0.5 text-xs font-semibold text-accent hover:bg-accent/30"
-      onclick={() => world.goToLive()}
-      aria-label="Go to live"
-    >
-      LIVE
-    </button>
-  {/if}
 </div>
