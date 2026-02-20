@@ -73,27 +73,36 @@ class TestWebSocket:
             assert msg["is_paused"] is False
 
     def test_seek_command(self, source):
-        import asyncio
-
         from starlette.testclient import TestClient
 
-        # Use direct source API to build history within the server's
-        # lifespan connection (TestClient calls source.connect() which resets).
-        # We step after the server starts using a background task.
         app = create_app(source)
-        with TestClient(app) as tc:
-            # Build history on the already-connected source
-            loop = asyncio.new_event_loop()
-            loop.run_until_complete(source.send_command("pause"))
+        with TestClient(app) as tc, tc.websocket_connect("/ws") as ws:
+            ws.receive_json()  # metadata
+            ws.receive_json()  # initial snapshot
+
+            # Build history via the WebSocket protocol (same event loop).
+            # Each step produces: tick_update (command ack) + snapshot
+            # (event subscription) + possible error_event/span_event.
+            ws.send_json({"command": "pause"})
+            ws.receive_json()  # tick_update ack for pause
+
             for _ in range(5):
-                loop.run_until_complete(source.send_command("step"))
-            loop.close()
+                ws.send_json({"command": "step"})
+                # Drain all messages until we see the snapshot for this step
+                seen_tick_update = False
+                seen_snapshot = False
+                while not (seen_tick_update and seen_snapshot):
+                    msg = ws.receive_json()
+                    if msg["type"] == "tick_update":
+                        seen_tick_update = True
+                    elif msg["type"] == "snapshot":
+                        seen_snapshot = True
+                    # error_event and span_event are silently consumed
 
-            with tc.websocket_connect("/ws") as ws:
-                ws.receive_json()  # metadata
-                ws.receive_json()  # initial snapshot
-
-                ws.send_json({"command": "seek", "tick": 1})
+            ws.send_json({"command": "seek", "tick": 1})
+            # Drain until we get the snapshot response for our seek
+            while True:
                 resp = ws.receive_json()
-                assert resp["type"] == "snapshot"
-                assert resp["tick"] == 1
+                if resp["type"] == "snapshot":
+                    break
+            assert resp["tick"] == 1

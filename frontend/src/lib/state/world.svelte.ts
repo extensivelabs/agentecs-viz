@@ -181,20 +181,26 @@ export class WorldState {
     if (this.client) this.disconnect();
     this.resetState();
 
-    this.client = new WebSocketClient(url ?? WS_URL, {
-      onMessage: (msg) => this.handleMessage(msg),
+    const client = new WebSocketClient(url ?? WS_URL, {
+      onMessage: (msg) => {
+        if (this.client !== client) return;
+        this.handleMessage(msg);
+      },
       onStateChange: (state) => {
+        if (this.client !== client) return;
         this.connectionState = state;
         if (state === "disconnected" || state === "error") {
           this.resetState();
         }
       },
       onError: (err) => {
+        if (this.client !== client) return;
         this.lastError =
           err instanceof Event ? "Connection error" : String(err);
       },
     });
-    this.client.connect();
+    this.client = client;
+    client.connect();
   }
 
   private resetState(): void {
@@ -205,6 +211,8 @@ export class WorldState {
     this.config = null;
     this.tickRange = null;
     this.supportsHistory = false;
+    this.isPaused = false;
+    this.lastError = null;
     this.entityHashes.clear();
     this.newEntityIds = new Set();
     this.changedEntityIds = new Set();
