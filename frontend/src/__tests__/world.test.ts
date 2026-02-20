@@ -1173,4 +1173,97 @@ describe("WorldState", () => {
       expect(state.isReplayPlaying).toBe(false);
     });
   });
+
+  describe("entity query filtering", () => {
+    beforeEach(() => {
+      state.connect();
+      const ws = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+      ws.simulateOpen();
+      ws.simulateMessage({
+        type: "metadata",
+        tick: 1,
+        config: null,
+        tick_range: [1, 10],
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot: makeSnapshot({
+          entities: [
+            { id: 1, archetype: ["Agent", "Position"], components: [
+              { type_name: "mod.Agent", type_short: "Agent", data: {} },
+              { type_name: "mod.Position", type_short: "Position", data: {} },
+            ] },
+            { id: 2, archetype: ["Task"], components: [
+              { type_name: "mod.Task", type_short: "Task", data: {} },
+            ] },
+            { id: 3, archetype: ["Agent", "Task"], components: [
+              { type_name: "mod.Agent", type_short: "Agent", data: {} },
+              { type_name: "mod.Task", type_short: "Task", data: {} },
+            ] },
+          ],
+          entity_count: 3,
+        }),
+      } satisfies SnapshotMessage);
+    });
+
+    it("availableComponents lists sorted unique component types", () => {
+      expect(state.availableComponents).toEqual(["Agent", "Position", "Task"]);
+    });
+
+    it("hasActiveFilter is false with no query", () => {
+      expect(state.hasActiveFilter).toBe(false);
+      expect(state.matchingEntityIds.size).toBe(0);
+    });
+
+    it("setQuery activates filter and computes matching IDs", () => {
+      state.setQuery({ name: "", clauses: [{ type: "with", component: "Agent" }] });
+      expect(state.hasActiveFilter).toBe(true);
+      expect(state.matchingEntityIds).toEqual(new Set([1, 3]));
+      expect(state.matchCount).toBe(2);
+    });
+
+    it("clearQuery removes filter", () => {
+      state.setQuery({ name: "", clauses: [{ type: "with", component: "Agent" }] });
+      state.clearQuery();
+      expect(state.hasActiveFilter).toBe(false);
+    });
+
+    it("saveQuery stores named query", () => {
+      state.saveQuery({ name: "agents", clauses: [{ type: "with", component: "Agent" }] });
+      expect(state.savedQueries).toHaveLength(1);
+      expect(state.savedQueries[0].name).toBe("agents");
+    });
+
+    it("saveQuery replaces existing query with same name", () => {
+      state.saveQuery({ name: "q", clauses: [{ type: "with", component: "Agent" }] });
+      state.saveQuery({ name: "q", clauses: [{ type: "with", component: "Task" }] });
+      expect(state.savedQueries).toHaveLength(1);
+      expect(state.savedQueries[0].clauses[0].component).toBe("Task");
+    });
+
+    it("loadQuery sets active query from saved", () => {
+      state.saveQuery({ name: "agents", clauses: [{ type: "with", component: "Agent" }] });
+      state.loadQuery("agents");
+      expect(state.hasActiveFilter).toBe(true);
+      expect(state.matchingEntityIds).toEqual(new Set([1, 3]));
+    });
+
+    it("deleteSavedQuery removes query by name", () => {
+      state.saveQuery({ name: "a", clauses: [{ type: "with", component: "Agent" }] });
+      state.saveQuery({ name: "b", clauses: [{ type: "with", component: "Task" }] });
+      state.deleteSavedQuery("a");
+      expect(state.savedQueries).toHaveLength(1);
+      expect(state.savedQueries[0].name).toBe("b");
+    });
+
+    it("saveQuery rejects empty name or empty clauses", () => {
+      state.saveQuery({ name: "", clauses: [{ type: "with", component: "Agent" }] });
+      expect(state.savedQueries).toHaveLength(0);
+      state.saveQuery({ name: "q", clauses: [] });
+      expect(state.savedQueries).toHaveLength(0);
+    });
+  });
 });

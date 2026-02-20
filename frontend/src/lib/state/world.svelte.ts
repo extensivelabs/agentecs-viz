@@ -1,5 +1,10 @@
 import { TOKEN_COST_BUDGET_USD, WS_URL } from "../config";
 import { diffEntity, type EntityDiff } from "../diff";
+import {
+  getAvailableComponents,
+  matchingEntityIds,
+  type QueryDef,
+} from "../query";
 import { aggregateSpanUsage, type ModelUsageTotals, type SpanUsageTotals } from "../traces";
 import type {
   ArchetypeConfig,
@@ -35,6 +40,9 @@ export class WorldState {
 
   spans: SpanEventMessage[] = $state([]);
   selectedSpanId: string | null = $state(null);
+
+  activeQuery: QueryDef | null = $state(null);
+  savedQueries: QueryDef[] = $state([]);
 
   previousSnapshot: WorldSnapshot | null = $state(null);
   pinnedEntityState: Map<number, EntitySnapshot> | null = $state(null);
@@ -159,6 +167,22 @@ export class WorldState {
   tokenCostBudgetExceeded: boolean = $derived(
     this.totalTokenUsage.costUsd >= this.tokenCostBudgetUsd,
   );
+
+  availableComponents: string[] = $derived(
+    getAvailableComponents(this.entities),
+  );
+
+  matchingEntityIds: Set<number> = $derived(
+    this.activeQuery && this.activeQuery.clauses.length > 0
+      ? matchingEntityIds(this.entities, this.activeQuery)
+      : new Set<number>(),
+  );
+
+  hasActiveFilter: boolean = $derived(
+    this.activeQuery !== null && this.activeQuery.clauses.length > 0,
+  );
+
+  matchCount: number = $derived(this.matchingEntityIds.size);
 
   selectedEntityDiff: EntityDiff | null = $derived.by(() => {
     if (!this.selectedEntity || !this.previousSnapshot) return null;
@@ -352,6 +376,39 @@ export class WorldState {
   clearPinnedState(): void {
     this.pinnedEntityState = null;
     this.pinnedTick = null;
+  }
+
+  setQuery(query: QueryDef | null): void {
+    this.activeQuery = query;
+  }
+
+  clearQuery(): void {
+    this.activeQuery = null;
+  }
+
+  saveQuery(query: QueryDef): void {
+    if (!query.name || query.clauses.length === 0) return;
+    const existing = this.savedQueries.findIndex((q) => q.name === query.name);
+    if (existing >= 0) {
+      this.savedQueries = [
+        ...this.savedQueries.slice(0, existing),
+        query,
+        ...this.savedQueries.slice(existing + 1),
+      ];
+    } else {
+      this.savedQueries = [...this.savedQueries, query];
+    }
+  }
+
+  deleteSavedQuery(name: string): void {
+    this.savedQueries = this.savedQueries.filter((q) => q.name !== name);
+  }
+
+  loadQuery(name: string): void {
+    const query = this.savedQueries.find((q) => q.name === name);
+    if (query) {
+      this.activeQuery = { ...query, clauses: [...query.clauses] };
+    }
   }
 
   private handleMessage(msg: ServerMessage): void {

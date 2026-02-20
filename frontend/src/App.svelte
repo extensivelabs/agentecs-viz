@@ -8,6 +8,7 @@
   import EntityView from "./lib/EntityView.svelte";
   import InspectorPanel from "./lib/InspectorPanel.svelte";
   import ErrorPanel from "./lib/ErrorPanel.svelte";
+  import QueryBuilder from "./lib/QueryBuilder.svelte";
   import TracesTab from "./lib/TracesTab.svelte";
   import type { Tab } from "./lib/TabBar.svelte";
 
@@ -104,11 +105,14 @@
 
     <main class="flex-1 overflow-hidden">
       {#if activeTab === "entities"}
-        <div class="flex h-full">
-          <div class="min-w-0 flex-1">
-            <EntityView />
+        <div class="flex h-full flex-col">
+          <QueryBuilder />
+          <div class="flex min-h-0 flex-1">
+            <div class="min-w-0 flex-1">
+              <EntityView />
+            </div>
+            <InspectorPanel />
           </div>
-          <InspectorPanel />
         </div>
       {:else if activeTab === "traces"}
         <TracesTab />

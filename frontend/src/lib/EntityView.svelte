@@ -227,6 +227,8 @@
     const selectedId = world.selectedEntityId;
     const showLabels = isDetail && viewport.scaled >= LABEL_ZOOM_THRESHOLD;
     const maxR = adaptiveMaxRadius(entities.length);
+    const filtering = world.hasActiveFilter;
+    const matchIds = world.matchingEntityIds;
 
     const activeIds = new Set<number>();
 
@@ -306,6 +308,8 @@
         gfx.hitArea = new Circle(0, 0, hitRadius);
         entityHitRadii.set(entity.id, hitRadius);
       }
+
+      gfx.alpha = filtering && !matchIds.has(entity.id) ? 0.15 : 1;
 
       // Labels
       if (showLabels && !animatingFrom) {
@@ -488,6 +492,8 @@
     void world.entityDiffCounts;
     void world.errorEntityIds;
     void world.pastErrorEntityIds;
+    void world.hasActiveFilter;
+    void world.matchingEntityIds;
     void currentViewLevel;
     void layoutMode;
 
