@@ -42,6 +42,7 @@ export class WorldState {
   private client: WebSocketClient | null = null;
   private entityHashes = new Map<number, string>();
   private replayTimer: ReturnType<typeof setInterval> | null = null;
+  private currentSpeed: number = 1;
 
   tick: number = $derived(this.snapshot?.tick ?? 0);
   entityCount: number = $derived(this.snapshot?.entity_count ?? 0);
@@ -225,6 +226,14 @@ export class WorldState {
   }
 
   togglePause(): void {
+    if (this.isReplayPlaying) {
+      this.stopReplay();
+      return;
+    }
+    if (!this.isAtLive && this.isPaused && this.supportsHistory) {
+      this.startReplay();
+      return;
+    }
     if (this.isPaused) {
       this.resume();
     } else {
@@ -233,15 +242,23 @@ export class WorldState {
   }
 
   step(): void {
+    if (!this.isAtLive && this.supportsHistory) {
+      this.seek(this.tick + 1);
+      return;
+    }
     this.client?.step();
   }
 
   stepBack(): void {
     if (!this.canScrub || this.tick <= this.minTick) return;
+    if (!this.isPaused) {
+      this.pause();
+    }
     this.seek(this.tick - 1);
   }
 
   goToLive(): void {
+    this.stopReplay();
     if (this.tickRange) {
       this.seek(this.tickRange[1]);
     }
@@ -253,7 +270,11 @@ export class WorldState {
   }
 
   setSpeed(ticksPerSecond: number): void {
+    this.currentSpeed = ticksPerSecond;
     this.client?.setSpeed(ticksPerSecond);
+    if (this.isReplayPlaying) {
+      this.startReplay();
+    }
   }
 
   selectEntity(id: number | null): void {
@@ -372,7 +393,8 @@ export class WorldState {
   private startReplay(speed?: number): void {
     this.stopReplay();
     this.isReplayPlaying = true;
-    const interval = speed ? 1000 / speed : 1000;
+    const effectiveSpeed = speed ?? this.currentSpeed;
+    const interval = effectiveSpeed > 0 ? 1000 / effectiveSpeed : 1000;
     this.replayTimer = setInterval(() => {
       if (!this.tickRange || !this.snapshot) {
         this.stopReplay();
