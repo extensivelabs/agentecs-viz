@@ -2,10 +2,28 @@ import type { EntitySnapshot } from "./types";
 import { getArchetypeKey } from "./utils";
 import { layoutSpacing, WORLD_SIZE } from "./rendering";
 
+export type LayoutMode = "spatial" | "pipeline";
+
 export interface EntityPosition {
   x: number;
   y: number;
 }
+
+export interface ColumnInfo {
+  name: string;
+  x: number;
+  width: number;
+  count: number;
+}
+
+export interface LayoutResult {
+  positions: Map<number, EntityPosition>;
+  columns: ColumnInfo[];
+}
+
+export const PIPELINE_HEADER_Y = 80;
+const PIPELINE_COLUMN_PADDING = 40;
+const UNKNOWN_STATUS = "(unknown)";
 
 function hasPositionComponent(entity: EntitySnapshot): { x: number; y: number } | null {
   for (const comp of entity.components) {
@@ -34,6 +52,25 @@ function clampToWorld(v: number): number {
   return Math.max(0, Math.min(WORLD_SIZE, v));
 }
 
+function clampToColumn(x: number, colIndex: number, colWidth: number, padding: number): number {
+  const left = colIndex * colWidth + padding;
+  const right = (colIndex + 1) * colWidth - padding;
+  return Math.max(left, Math.min(right, x));
+}
+
+export function getEntityStatusValue(
+  entity: EntitySnapshot,
+  statusFields: string[],
+): string | null {
+  for (const field of statusFields) {
+    for (const comp of entity.components) {
+      const val = comp.data[field];
+      if (val !== undefined && val !== null) return String(val);
+    }
+  }
+  return null;
+}
+
 export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityPosition> {
   const positions = new Map<number, EntityPosition>();
   if (entities.length === 0) return positions;
@@ -41,7 +78,6 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
   const center = WORLD_SIZE / 2;
   const scale = WORLD_SIZE / 200;
 
-  // Separate entities with Position components from those needing layout
   const unpositioned: EntitySnapshot[] = [];
   for (const entity of entities) {
     const pos = hasPositionComponent(entity);
@@ -59,7 +95,6 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
 
   const spacing = layoutSpacing(unpositioned.length);
 
-  // Group unpositioned entities by archetype
   const groups = new Map<string, EntitySnapshot[]>();
   for (const entity of unpositioned) {
     const key = getArchetypeKey(entity.archetype);
@@ -71,7 +106,6 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
     group.push(entity);
   }
 
-  // Collect all unique component names and assign anchor points on a circle
   const allComponents = new Set<string>();
   for (const entity of unpositioned) {
     for (const comp of entity.archetype) {
@@ -89,7 +123,6 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
     });
   }
 
-  // Each archetype's centroid = average of its components' anchor positions
   const groupCentroids = new Map<string, { x: number; y: number }>();
   for (const [key, group] of groups) {
     const archetype = group[0].archetype;
@@ -110,7 +143,6 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
     groupCentroids.set(key, { x: cx, y: cy });
   }
 
-  // Place entities in spiral around their group centroid
   for (const [key, group] of groups) {
     const centroid = groupCentroids.get(key)!;
     for (let j = 0; j < group.length; j++) {
@@ -125,6 +157,68 @@ export function componentLayout(entities: EntitySnapshot[]): Map<number, EntityP
   return positions;
 }
 
-export function computeLayout(entities: EntitySnapshot[]): Map<number, EntityPosition> {
-  return componentLayout(entities);
+export function pipelineLayout(
+  entities: EntitySnapshot[],
+  statusFields: string[],
+): LayoutResult {
+  const positions = new Map<number, EntityPosition>();
+  const columns: ColumnInfo[] = [];
+  if (entities.length === 0) return { positions, columns };
+
+  // Group entities by status value
+  const groups = new Map<string, EntitySnapshot[]>();
+  for (const entity of entities) {
+    const status = getEntityStatusValue(entity, statusFields) ?? UNKNOWN_STATUS;
+    let group = groups.get(status);
+    if (!group) {
+      group = [];
+      groups.set(status, group);
+    }
+    group.push(entity);
+  }
+
+  // Sort columns: by count descending, then alphabetically
+  const sortedKeys = [...groups.keys()].sort((a, b) => {
+    if (a === UNKNOWN_STATUS) return 1;
+    if (b === UNKNOWN_STATUS) return -1;
+    const countDiff = groups.get(b)!.length - groups.get(a)!.length;
+    if (countDiff !== 0) return countDiff;
+    return a.localeCompare(b);
+  });
+
+  const numCols = sortedKeys.length;
+  const colWidth = WORLD_SIZE / numCols;
+  const spacing = layoutSpacing(entities.length);
+  const contentTop = PIPELINE_HEADER_Y + PIPELINE_COLUMN_PADDING;
+
+  for (let col = 0; col < numCols; col++) {
+    const key = sortedKeys[col];
+    const group = groups.get(key)!;
+    const colCenterX = (col + 0.5) * colWidth;
+
+    columns.push({ name: key, x: colCenterX, width: colWidth, count: group.length });
+
+    // Place entities in spiral within the column
+    const spiralCenterY = contentTop + WORLD_SIZE * 0.35;
+    for (let j = 0; j < group.length; j++) {
+      const pos = spiralPosition(j, colCenterX, spiralCenterY, spacing);
+      positions.set(group[j].id, {
+        x: clampToWorld(clampToColumn(pos.x, col, colWidth, PIPELINE_COLUMN_PADDING)),
+        y: clampToWorld(Math.max(contentTop, pos.y)),
+      });
+    }
+  }
+
+  return { positions, columns };
+}
+
+export function computeLayout(
+  entities: EntitySnapshot[],
+  mode: LayoutMode = "spatial",
+  statusFields: string[] = [],
+): LayoutResult {
+  if (mode === "pipeline") {
+    return pipelineLayout(entities, statusFields);
+  }
+  return { positions: componentLayout(entities), columns: [] };
 }

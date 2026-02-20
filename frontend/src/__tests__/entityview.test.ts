@@ -43,4 +43,16 @@ describe("EntityView", () => {
     expect(labels).toContain("Zoom out");
     expect(labels).toContain("Reset view");
   });
+
+  it("renders layout mode toggle with spatial and pipeline buttons", () => {
+    const { container } = render(EntityView);
+    const toggle = container.querySelector("[data-testid='layout-mode-toggle']");
+    expect(toggle).toBeTruthy();
+    const spatial = container.querySelector("[data-testid='layout-spatial']");
+    const pipeline = container.querySelector("[data-testid='layout-pipeline']");
+    expect(spatial).toBeTruthy();
+    expect(pipeline).toBeTruthy();
+    expect(spatial!.textContent?.trim()).toBe("spatial");
+    expect(pipeline!.textContent?.trim()).toBe("pipeline");
+  });
 });
