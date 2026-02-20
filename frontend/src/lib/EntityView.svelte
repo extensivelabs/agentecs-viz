@@ -6,6 +6,7 @@
   import { getArchetypeColor, getArchetypeColorCSS } from "./colors";
   import { getArchetypeKey, getArchetypeDisplay } from "./utils";
   import { computeLayout } from "./layout";
+  import type { LayoutMode, LayoutResult, ColumnInfo, EntityPosition } from "./layout";
   import {
     WORLD_SIZE,
     BACKGROUND_COLOR,
@@ -30,6 +31,7 @@
 
   let viewLevelOverride: ViewLevel = $state("auto");
   let currentViewLevel: "detail" | "overview" = $state("detail");
+  let layoutMode: LayoutMode = $state("spatial");
 
   // Entity graphics cache
   let entityGraphics = new Map<number, Graphics>();
@@ -37,9 +39,20 @@
   let entityLabels = new Map<number, Text>();
   let entityBadges = new Map<number, Text>();
   let lastLayoutTick = -1;
-  let cachedLayout = new Map<number, { x: number; y: number }>();
+  let lastLayoutMode: LayoutMode = "spatial";
+  let cachedLayoutResult: LayoutResult = { positions: new Map(), columns: [] };
+  let cachedLayout = new Map<number, EntityPosition>();
 
-  // Entity tooltip cache (built during render for O(1) hover lookup)
+  // Animation
+  let animatingFrom: Map<number, EntityPosition> | null = null;
+  let animationStart = 0;
+  const ANIM_DURATION_MS = 300;
+  let animFrameId = 0;
+
+  // Column headers (screen-space, updated on viewport change)
+  let columnHeaders: { name: string; screenX: number; screenY: number; count: number }[] = $state([]);
+
+  // Entity tooltip cache
   let entityTooltips = new Map<number, string>();
 
   // Tooltip state
@@ -109,26 +122,109 @@
     currentViewLevel = entityPixelSize >= DETAIL_OVERVIEW_THRESHOLD ? "detail" : "overview";
   }
 
-  function getLayout() {
+  function getStatusFields(): string[] {
+    return world.config?.field_hints?.status_fields ?? ["status", "state", "phase"];
+  }
+
+  function recomputeLayout() {
     const tick = world.tick;
-    if (tick !== lastLayoutTick) {
-      cachedLayout = computeLayout(world.entities);
-      lastLayoutTick = tick;
+    const mode = layoutMode;
+    const needsRecompute = tick !== lastLayoutTick || mode !== lastLayoutMode;
+    if (!needsRecompute) return;
+
+    const prevPositions = cachedLayout;
+    const modeChanged = mode !== lastLayoutMode && prevPositions.size > 0;
+
+    cachedLayoutResult = computeLayout(world.entities, mode, getStatusFields());
+    cachedLayout = cachedLayoutResult.positions;
+    lastLayoutTick = tick;
+    lastLayoutMode = mode;
+
+    if (modeChanged) {
+      animatingFrom = new Map(prevPositions);
+      animationStart = performance.now();
+      startAnimation();
     }
-    return cachedLayout;
+
+    updateColumnHeaders();
+  }
+
+  function startAnimation() {
+    if (animFrameId) cancelAnimationFrame(animFrameId);
+    function tick() {
+      const progress = Math.min(1, (performance.now() - animationStart) / ANIM_DURATION_MS);
+      applyAnimatedPositions(progress);
+      if (progress < 1) {
+        animFrameId = requestAnimationFrame(tick);
+      } else {
+        animatingFrom = null;
+        animFrameId = 0;
+      }
+    }
+    animFrameId = requestAnimationFrame(tick);
+  }
+
+  function easeOutCubic(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  function applyAnimatedPositions(rawProgress: number) {
+    if (!viewport || !animatingFrom) return;
+    const progress = easeOutCubic(rawProgress);
+    for (const [id, gfx] of entityGraphics) {
+      const from = animatingFrom.get(id);
+      const to = cachedLayout.get(id);
+      if (!to) continue;
+      if (from) {
+        const x = from.x + (to.x - from.x) * progress;
+        const y = from.y + (to.y - from.y) * progress;
+        gfx.position.set(x, y);
+      } else {
+        gfx.position.set(to.x, to.y);
+      }
+      // Update label and badge positions to follow
+      const label = entityLabels.get(id);
+      if (label?.visible) {
+        label.position.set(gfx.position.x, gfx.position.y - (entityHitRadii.get(id) ?? 12) - 2);
+      }
+      const badge = entityBadges.get(id);
+      if (badge?.visible) {
+        const r = entityHitRadii.get(id) ?? 12;
+        badge.position.set(gfx.position.x + r + 6, gfx.position.y - r - 4);
+      }
+    }
+  }
+
+  function updateColumnHeaders() {
+    if (!viewport || layoutMode !== "pipeline" || cachedLayoutResult.columns.length === 0) {
+      columnHeaders = [];
+      return;
+    }
+    columnHeaders = cachedLayoutResult.columns.map(col => {
+      const screen = viewport!.toScreen(col.x, 30);
+      return { name: col.name, screenX: screen.x, screenY: screen.y, count: col.count };
+    });
+  }
+
+  function setLayoutMode(mode: LayoutMode) {
+    if (mode === layoutMode) return;
+    layoutMode = mode;
+    // Force recompute on next render
+    lastLayoutMode = mode === "spatial" ? "pipeline" : "spatial";
   }
 
   function renderEntities() {
     if (!viewport || !app) return;
 
+    recomputeLayout();
+
     const entities = world.entities;
-    const layout = getLayout();
+    const layout = cachedLayout;
     const isDetail = currentViewLevel === "detail";
     const selectedId = world.selectedEntityId;
     const showLabels = isDetail && viewport.scaled >= LABEL_ZOOM_THRESHOLD;
     const maxR = adaptiveMaxRadius(entities.length);
 
-    // Track which entity IDs are still present
     const activeIds = new Set<number>();
 
     for (const entity of entities) {
@@ -196,7 +292,11 @@
         gfx.circle(0, 0, radius + errorOffset).stroke({ color: 0x666666, width: 1 });
       }
 
-      gfx.position.set(pos.x, pos.y);
+      // Only set position directly if not animating
+      if (!animatingFrom) {
+        gfx.position.set(pos.x, pos.y);
+      }
+
       entityTooltips.set(entity.id, `Entity ${entity.id}\n${getArchetypeDisplay(entity.archetype)}`);
       const hitRadius = Math.max(radius, MIN_HIT_RADIUS);
       if (entityHitRadii.get(entity.id) !== hitRadius) {
@@ -205,7 +305,7 @@
       }
 
       // Labels
-      if (showLabels) {
+      if (showLabels && !animatingFrom) {
         let label = entityLabels.get(entity.id);
         if (!label) {
           label = new Text({
@@ -228,7 +328,7 @@
       }
 
       // Diff badges
-      const diffCount = isDetail ? world.entityDiffCounts.get(entity.id) : undefined;
+      const diffCount = isDetail && !animatingFrom ? world.entityDiffCounts.get(entity.id) : undefined;
       if (diffCount) {
         let badge = entityBadges.get(entity.id);
         if (!badge) {
@@ -290,7 +390,9 @@
       entityBadges = new Map();
       entityTooltips = new Map();
       cachedLayout = new Map();
+      cachedLayoutResult = { positions: new Map(), columns: [] };
       lastLayoutTick = -1;
+      lastLayoutMode = "spatial";
       initialFitDone = false;
 
       try {
@@ -333,11 +435,10 @@
 
       app.stage.addChild(viewport);
 
-      // Initial fit — will be refined once entities arrive
       viewport.fitWorld(true);
 
-      viewport.on("zoomed", () => updateViewLevel());
-      viewport.on("moved", () => updateViewLevel());
+      viewport.on("zoomed", () => { updateViewLevel(); updateColumnHeaders(); });
+      viewport.on("moved", () => { updateViewLevel(); updateColumnHeaders(); });
 
       updateViewLevel();
     }
@@ -347,6 +448,7 @@
     const resizeObserver = new ResizeObserver(() => {
       if (viewport && containerEl) {
         viewport.resize(containerEl.clientWidth, containerEl.clientHeight);
+        updateColumnHeaders();
       }
     });
     resizeObserver.observe(containerEl);
@@ -360,6 +462,7 @@
 
     return () => {
       destroyed = true;
+      if (animFrameId) cancelAnimationFrame(animFrameId);
       window.removeEventListener("keydown", onKeyDown);
       resizeObserver.disconnect();
       entityGraphics.clear();
@@ -376,7 +479,6 @@
   });
 
   $effect(() => {
-    // Read dependencies
     void world.entities;
     void world.selectedEntityId;
     void world.changedEntityIds;
@@ -384,6 +486,7 @@
     void world.errorEntityIds;
     void world.pastErrorEntityIds;
     void currentViewLevel;
+    void layoutMode;
 
     renderEntities();
 
@@ -398,21 +501,56 @@
 <div class="relative h-full w-full" data-testid="entity-view">
   <div bind:this={containerEl} class="h-full w-full"></div>
 
-  <!-- View level toggle -->
-  <div class="absolute right-3 top-3 flex items-center gap-1 rounded bg-bg-secondary/90 px-2 py-1 text-xs">
-    {#each (["detail", "auto", "overview"] as const) as level}
-      <button
-        class="rounded px-1.5 py-0.5 capitalize"
-        class:bg-accent={viewLevelOverride === level}
-        class:text-bg-primary={viewLevelOverride === level}
-        class:text-text-secondary={viewLevelOverride !== level}
-        class:hover:text-text-primary={viewLevelOverride !== level}
-        onclick={() => { viewLevelOverride = level; updateViewLevel(); }}
-      >
-        {level}
-      </button>
-    {/each}
+  <!-- Layout mode + view level toggle -->
+  <div class="absolute right-3 top-3 flex items-center gap-3 text-xs">
+    <div class="flex items-center gap-1 rounded bg-bg-secondary/90 px-2 py-1" data-testid="layout-mode-toggle">
+      {#each (["spatial", "pipeline"] as const) as mode}
+        <button
+          class="rounded px-1.5 py-0.5 capitalize"
+          class:bg-accent={layoutMode === mode}
+          class:text-bg-primary={layoutMode === mode}
+          class:text-text-secondary={layoutMode !== mode}
+          class:hover:text-text-primary={layoutMode !== mode}
+          onclick={() => setLayoutMode(mode)}
+          data-testid={`layout-${mode}`}
+        >
+          {mode}
+        </button>
+      {/each}
+    </div>
+    <div class="flex items-center gap-1 rounded bg-bg-secondary/90 px-2 py-1">
+      {#each (["detail", "auto", "overview"] as const) as level}
+        <button
+          class="rounded px-1.5 py-0.5 capitalize"
+          class:bg-accent={viewLevelOverride === level}
+          class:text-bg-primary={viewLevelOverride === level}
+          class:text-text-secondary={viewLevelOverride !== level}
+          class:hover:text-text-primary={viewLevelOverride !== level}
+          onclick={() => { viewLevelOverride = level; updateViewLevel(); }}
+        >
+          {level}
+        </button>
+      {/each}
+    </div>
   </div>
+
+  <!-- Pipeline column headers -->
+  {#if layoutMode === "pipeline" && columnHeaders.length > 0}
+    <div class="pointer-events-none absolute inset-0 overflow-hidden" data-testid="pipeline-columns">
+      {#each columnHeaders as col (col.name)}
+        <div
+          class="absolute flex -translate-x-1/2 flex-col items-center"
+          style:left={col.screenX + "px"}
+          style:top={Math.max(4, col.screenY) + "px"}
+        >
+          <span class="rounded bg-bg-secondary/90 px-2 py-0.5 text-xs font-medium text-text-primary">
+            {col.name}
+          </span>
+          <span class="mt-0.5 text-[10px] text-text-muted">({col.count})</span>
+        </div>
+      {/each}
+    </div>
+  {/if}
 
   <!-- Archetype legend -->
   {#if archetypeCounts.length > 0}
