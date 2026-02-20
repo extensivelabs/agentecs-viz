@@ -83,7 +83,7 @@
 
   let tickDisplayWidth = $derived.by(() => {
     const maxDigits = String(world.maxTick).length;
-    return maxDigits * 2 + 3; // "NNN / NNN" = digits + " / " + digits
+    return maxDigits * 2 + 3; // worst-case width: maxDigits per number + 3 for " / "
   });
 </script>
 

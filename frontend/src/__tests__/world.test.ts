@@ -751,4 +751,186 @@ describe("WorldState", () => {
       expect(state.selectedSpanId).toBeNull();
     });
   });
+
+  describe("replay", () => {
+    let ws: InstanceType<typeof MockWebSocket>;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      state.connect("ws://test/ws");
+      ws = MockWebSocket.instances[0];
+      ws.simulateOpen();
+
+      // Set up history-capable session at tick 5 of 10
+      ws.simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: null,
+        tick_range: [0, 10],
+        supports_history: true,
+        is_paused: true,
+      } satisfies MetadataMessage);
+
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 5,
+        snapshot: makeSnapshot({ tick: 5 }),
+      } satisfies SnapshotMessage);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("togglePause starts replay when paused in history mode", () => {
+      expect(state.playbackMode).toBe("history");
+      expect(state.isReplayPlaying).toBe(false);
+
+      state.togglePause();
+
+      expect(state.isReplayPlaying).toBe(true);
+      expect(state.playbackMode).toBe("replay");
+    });
+
+    it("togglePause stops replay when replaying", () => {
+      state.togglePause(); // start replay
+      expect(state.isReplayPlaying).toBe(true);
+
+      state.togglePause(); // stop replay
+      expect(state.isReplayPlaying).toBe(false);
+    });
+
+    it("replay advances tick via seek on each interval", () => {
+      state.togglePause(); // start replay at 1 tick/sec
+
+      const msgsBefore = ws.sentMessages.length;
+      vi.advanceTimersByTime(1000);
+
+      const seekMsg = JSON.parse(ws.sentMessages[ws.sentMessages.length - 1]);
+      expect(seekMsg).toEqual({ command: "seek", tick: 6 });
+      expect(ws.sentMessages.length).toBeGreaterThan(msgsBefore);
+    });
+
+    it("replay stops when reaching maxTick", () => {
+      // Position at tick 9 (one before max)
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 9,
+        snapshot: makeSnapshot({ tick: 9 }),
+      } satisfies SnapshotMessage);
+
+      state.togglePause(); // start replay
+      expect(state.isReplayPlaying).toBe(true);
+
+      vi.advanceTimersByTime(1000); // advance to tick 10
+      // Simulate server responding with tick 10 snapshot
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 10,
+        snapshot: makeSnapshot({ tick: 10 }),
+      } satisfies SnapshotMessage);
+
+      vi.advanceTimersByTime(1000); // next interval - should stop
+      expect(state.isReplayPlaying).toBe(false);
+    });
+
+    it("step seeks forward in history mode instead of client.step()", () => {
+      // We're at tick 5, not at live (tick 10)
+      const msgsBefore = ws.sentMessages.length;
+      state.step();
+
+      const msg = JSON.parse(ws.sentMessages[ws.sentMessages.length - 1]);
+      expect(msg).toEqual({ command: "seek", tick: 6 });
+      // Should only send seek, not step
+      expect(ws.sentMessages.length).toBe(msgsBefore + 1);
+    });
+
+    it("step sends client.step() when at live tick", () => {
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 10,
+        snapshot: makeSnapshot({ tick: 10 }),
+      } satisfies SnapshotMessage);
+
+      state.step();
+
+      const msg = JSON.parse(ws.sentMessages[ws.sentMessages.length - 1]);
+      expect(msg).toEqual({ command: "step" });
+    });
+
+    it("stepBack auto-pauses when not paused", () => {
+      // Make state not paused
+      ws.simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: null,
+        tick_range: [0, 10],
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+
+      state.stepBack();
+
+      // Should have sent pause then seek
+      const msgs = ws.sentMessages.map((m) => JSON.parse(m));
+      const pauseMsg = msgs.find((m) => m.command === "pause");
+      const seekMsg = msgs.find((m) => m.command === "seek" && m.tick === 4);
+      expect(pauseMsg).toBeDefined();
+      expect(seekMsg).toBeDefined();
+    });
+
+    it("goToLive stops replay and resumes", () => {
+      state.togglePause(); // start replay
+      expect(state.isReplayPlaying).toBe(true);
+
+      state.goToLive();
+
+      expect(state.isReplayPlaying).toBe(false);
+      // Should seek to max tick and resume
+      const msgs = ws.sentMessages.map((m) => JSON.parse(m));
+      expect(msgs).toContainEqual({ command: "seek", tick: 10 });
+      expect(msgs).toContainEqual({ command: "resume" });
+    });
+
+    it("setSpeed restarts replay at new speed when replaying", () => {
+      state.togglePause(); // start replay at speed 1
+
+      // Advance to verify original speed works
+      vi.advanceTimersByTime(1000);
+      const seekCount1 = ws.sentMessages.filter((m) =>
+        JSON.parse(m).command === "seek",
+      ).length;
+
+      // Change speed to 5
+      state.setSpeed(5);
+      expect(state.isReplayPlaying).toBe(true);
+
+      // At speed 5, interval is 200ms - advance 1000ms = 5 seeks
+      vi.advanceTimersByTime(1000);
+      const seekCount2 = ws.sentMessages.filter((m) =>
+        JSON.parse(m).command === "seek",
+      ).length;
+
+      // Should have more seeks after speed increase
+      expect(seekCount2 - seekCount1).toBeGreaterThanOrEqual(4);
+    });
+
+    it("setSpeed stores speed for replay without restarting when not replaying", () => {
+      const msgsBefore = ws.sentMessages.length;
+      state.setSpeed(5);
+
+      // Should send set_speed command
+      const msg = JSON.parse(ws.sentMessages[ws.sentMessages.length - 1]);
+      expect(msg).toEqual({ command: "set_speed", ticks_per_second: 5 });
+      expect(state.isReplayPlaying).toBe(false);
+    });
+
+    it("disconnect stops replay", () => {
+      state.togglePause(); // start replay
+      expect(state.isReplayPlaying).toBe(true);
+
+      state.disconnect();
+      expect(state.isReplayPlaying).toBe(false);
+    });
+  });
 });
