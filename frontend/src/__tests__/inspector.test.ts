@@ -3,7 +3,7 @@ import { render, fireEvent } from "@testing-library/svelte";
 import InspectorPanel from "../lib/InspectorPanel.svelte";
 import { world } from "../lib/state/world.svelte";
 import type { WorldSnapshot, VisualizationConfig, MetadataMessage, SnapshotMessage } from "../lib/types";
-import { MockWebSocket, makeEntity, makeSnapshot, makeConfig, setWorldState } from "./helpers";
+import { MockWebSocket, makeEntity, makeSnapshot, makeConfig, makeSpanEvent, setWorldState } from "./helpers";
 
 describe("InspectorPanel", () => {
   beforeEach(() => {
@@ -87,15 +87,41 @@ describe("InspectorPanel", () => {
     expect(container.textContent).not.toContain("x:");
   });
 
-  it("shows traces section", () => {
+  it("shows traces section with token and model totals", () => {
     const entity = makeEntity(1, [{ type_short: "A", data: {} }]);
     setWorldState([entity]);
+    world.spans = [
+      makeSpanEvent(1, 1, {
+        attributes: {
+          "agentecs.tick": 1,
+          "agentecs.entity_id": 1,
+          "gen_ai.request.model": "gpt-4o",
+          "gen_ai.usage.input_tokens": 100,
+          "gen_ai.usage.output_tokens": 50,
+        },
+      }),
+      makeSpanEvent(1, 2, {
+        attributes: {
+          "agentecs.tick": 1,
+          "agentecs.entity_id": 2,
+          "gen_ai.request.model": "gpt-4o-mini",
+          "gen_ai.usage.input_tokens": 1,
+          "gen_ai.usage.output_tokens": 1,
+        },
+      }),
+    ];
     world.selectEntity(1);
 
     const { container } = render(InspectorPanel);
     const section = container.querySelector("[data-testid='traces-section']");
     expect(section).toBeTruthy();
-    expect(section!.textContent).toContain("spans");
+    expect(section!.textContent).toContain("span");
+    const tokenSummary = container.querySelector("[data-testid='entity-token-summary']");
+    expect(tokenSummary).toBeTruthy();
+    expect(tokenSummary!.textContent).toContain("150");
+    const modelBreakdown = container.querySelector("[data-testid='entity-model-breakdown']");
+    expect(modelBreakdown).toBeTruthy();
+    expect(modelBreakdown!.textContent).toContain("gpt-4o");
   });
 
   it("shows close button that deselects entity", async () => {

@@ -12,7 +12,7 @@ export function numberToHex(n: number): string {
 
 export function resolveArchetypeColor(
   archetype: readonly string[],
-  configMap: Map<string, { color?: string }>,
+  configMap: Map<string, { color?: string | null }>,
   palette?: string[] | null,
 ): number {
   const key = getArchetypeKey(archetype);

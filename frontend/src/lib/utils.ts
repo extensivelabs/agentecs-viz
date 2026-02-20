@@ -52,3 +52,12 @@ export function entityHash(entity: EntitySnapshot): string {
   );
   return sorted.map((c) => `${c.type_short}:${stableStringify(c.data)}`).join("|");
 }
+
+export function formatTokens(count: number): string {
+  return count.toLocaleString();
+}
+
+export function formatCostUsd(costUsd: number): string {
+  if (costUsd >= 1) return `$${costUsd.toFixed(2)}`;
+  return `$${costUsd.toFixed(4)}`;
+}
