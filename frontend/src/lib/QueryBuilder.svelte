@@ -79,7 +79,7 @@
 
       <!-- Inline clause chips (visible even when collapsed) -->
       <div class="flex items-center gap-1 overflow-x-auto">
-        {#each world.activeQuery?.clauses ?? [] as clause, i (i)}
+        {#each world.activeQuery?.clauses ?? [] as clause, i (clause.component)}
           <span
             class="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] {clause.type === 'with' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}"
             data-testid="clause-chip"
