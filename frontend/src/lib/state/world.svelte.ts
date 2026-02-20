@@ -179,41 +179,57 @@ export class WorldState {
 
   connect(url?: string): void {
     if (this.client) this.disconnect();
+    this.resetState();
 
-    this.client = new WebSocketClient(url ?? WS_URL, {
-      onMessage: (msg) => this.handleMessage(msg),
+    const client = new WebSocketClient(url ?? WS_URL, {
+      onMessage: (msg) => {
+        if (this.client !== client) return;
+        this.handleMessage(msg);
+      },
       onStateChange: (state) => {
+        if (this.client !== client) return;
         this.connectionState = state;
         if (state === "disconnected" || state === "error") {
-          this.snapshot = null;
-          this.previousSnapshot = null;
-          this.pinnedEntityState = null;
-          this.pinnedTick = null;
-          this.config = null;
-          this.tickRange = null;
-          this.supportsHistory = false;
-          this.entityHashes.clear();
-          this.newEntityIds.clear();
-          this.changedEntityIds.clear();
-          this.selectedEntityId = null;
-          this.errors = [];
-          this.errorPanelOpen = false;
-          this.spans = [];
-          this.selectedSpanId = null;
+          this.resetState();
         }
       },
       onError: (err) => {
+        if (this.client !== client) return;
         this.lastError =
           err instanceof Event ? "Connection error" : String(err);
       },
     });
-    this.client.connect();
+    this.client = client;
+    client.connect();
+  }
+
+  private resetState(): void {
+    this.snapshot = null;
+    this.previousSnapshot = null;
+    this.pinnedEntityState = null;
+    this.pinnedTick = null;
+    this.config = null;
+    this.tickRange = null;
+    this.supportsHistory = false;
+    this.isPaused = false;
+    this.lastError = null;
+    this.entityHashes.clear();
+    this.newEntityIds = new Set();
+    this.changedEntityIds = new Set();
+    this.selectedEntityId = null;
+    this.errors = [];
+    this.errorPanelOpen = false;
+    this.spans = [];
+    this.selectedSpanId = null;
   }
 
   disconnect(): void {
     this.stopReplay();
-    this.client?.disconnect();
+    const client = this.client;
     this.client = null;
+    this.connectionState = "disconnected";
+    this.resetState();
+    client?.disconnect();
   }
 
   pause(): void {

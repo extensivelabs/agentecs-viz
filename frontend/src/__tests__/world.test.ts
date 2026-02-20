@@ -66,6 +66,112 @@ describe("WorldState", () => {
       expect(state.config).toBeNull();
       expect(state.snapshot).toBeNull();
     });
+
+    it("clears stale state when connect() is called", () => {
+      state.connect("ws://test/ws");
+      MockWebSocket.instances[0].simulateOpen();
+
+      // Populate state from first session
+      MockWebSocket.instances[0].simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: makeConfig(),
+        tick_range: [0, 500],
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+      const snap = makeSnapshot({ tick: 500 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 500,
+        snapshot: snap,
+      } satisfies SnapshotMessage);
+      MockWebSocket.instances[0].simulateMessage(makeErrorEvent(500, 1));
+      MockWebSocket.instances[0].simulateMessage(makeSpanEvent(500, 1));
+
+      expect(state.tick).toBe(500);
+      expect(state.errors.length).toBe(1);
+      expect(state.spans.length).toBe(1);
+      expect(state.tickRange).toEqual([0, 500]);
+
+      // Reconnect — state should be cleared immediately
+      state.connect("ws://test/ws");
+      expect(state.snapshot).toBeNull();
+      expect(state.tick).toBe(0);
+      expect(state.config).toBeNull();
+      expect(state.tickRange).toBeNull();
+      expect(state.errors).toEqual([]);
+      expect(state.spans).toEqual([]);
+      expect(state.supportsHistory).toBe(false);
+    });
+
+    it("clears lastError and isPaused on reconnect", () => {
+      state.connect("ws://test/ws");
+      MockWebSocket.instances[0].simulateOpen();
+
+      // Set error and paused state
+      MockWebSocket.instances[0].simulateMessage({
+        type: "error",
+        tick: 0,
+        message: "old error",
+      } satisfies ErrorMessage);
+      MockWebSocket.instances[0].simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: null,
+        tick_range: null,
+        supports_history: false,
+        is_paused: true,
+      } satisfies MetadataMessage);
+
+      expect(state.lastError).toBe("old error");
+      expect(state.isPaused).toBe(true);
+
+      // Reconnect — lastError and isPaused should be cleared
+      state.connect("ws://test/ws");
+      expect(state.lastError).toBeNull();
+      expect(state.isPaused).toBe(false);
+    });
+
+    it("stale client callbacks do not clobber new connection state", () => {
+      state.connect("ws://test/ws");
+      const oldWs = MockWebSocket.instances[0];
+      oldWs.simulateOpen();
+
+      MockWebSocket.instances[0].simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: makeConfig(),
+        tick_range: [0, 10],
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+
+      // Reconnect — creates a new client
+      state.connect("ws://test/ws");
+      const newWs = MockWebSocket.instances[1];
+      newWs.simulateOpen();
+
+      // New connection sets up state
+      newWs.simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: makeConfig({ world_name: "New World" }),
+        tick_range: [0, 20],
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+
+      expect(state.worldName).toBe("New World");
+      expect(state.connectionState).toBe("connected");
+
+      // Old WebSocket fires close — should NOT clobber new state
+      oldWs.simulateClose();
+
+      expect(state.connectionState).toBe("connected");
+      expect(state.worldName).toBe("New World");
+      expect(state.config).not.toBeNull();
+    });
   });
 
   describe("handleMessage", () => {

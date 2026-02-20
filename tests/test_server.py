@@ -73,25 +73,39 @@ class TestWebSocket:
             assert msg["is_paused"] is False
 
     def test_seek_command(self, source):
-        import asyncio
-
         from starlette.testclient import TestClient
-
-        async def setup():
-            await source.connect()
-            await source.send_command("pause")
-            for _ in range(5):
-                await source.send_command("step")
-            await source.disconnect()
-
-        asyncio.run(setup())
 
         app = create_app(source)
         with TestClient(app) as tc, tc.websocket_connect("/ws") as ws:
             ws.receive_json()  # metadata
             ws.receive_json()  # initial snapshot
 
+            # Build history via the WebSocket protocol (same event loop).
+            # Each step produces: tick_update (command ack) + snapshot
+            # (event subscription) + possible error_event/span_event.
+            ws.send_json({"command": "pause"})
+            ws.receive_json()  # tick_update ack for pause
+
+            max_drain = 20  # bound to prevent hangs if protocol changes
+            for _ in range(5):
+                ws.send_json({"command": "step"})
+                seen_tick_update = False
+                seen_snapshot = False
+                for _ in range(max_drain):
+                    msg = ws.receive_json()
+                    if msg["type"] == "tick_update":
+                        seen_tick_update = True
+                    elif msg["type"] == "snapshot":
+                        seen_snapshot = True
+                    if seen_tick_update and seen_snapshot:
+                        break
+                assert seen_tick_update and seen_snapshot, "step did not produce expected messages"
+
             ws.send_json({"command": "seek", "tick": 1})
-            resp = ws.receive_json()
-            assert resp["type"] == "snapshot"
+            resp = None
+            for _ in range(max_drain):
+                resp = ws.receive_json()
+                if resp["type"] == "snapshot":
+                    break
+            assert resp is not None and resp["type"] == "snapshot", "seek did not produce snapshot"
             assert resp["tick"] == 1
