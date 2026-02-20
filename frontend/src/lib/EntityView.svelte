@@ -309,7 +309,8 @@
         entityHitRadii.set(entity.id, hitRadius);
       }
 
-      gfx.alpha = filtering && !matchIds.has(entity.id) ? 0.15 : 1;
+      const dimmed = filtering && !matchIds.has(entity.id);
+      gfx.alpha = dimmed ? 0.15 : 1;
 
       // Labels
       if (showLabels && !animatingFrom) {
@@ -329,6 +330,7 @@
         }
         label.position.set(pos.x, pos.y - radius - 2);
         label.visible = true;
+        label.alpha = dimmed ? 0.15 : 1;
       } else {
         const label = entityLabels.get(entity.id);
         if (label) label.visible = false;
@@ -354,6 +356,7 @@
         badge.text = `${diffCount}`;
         badge.position.set(pos.x + radius + 6, pos.y - radius - 4);
         badge.visible = true;
+        badge.alpha = dimmed ? 0.15 : 1;
       } else {
         const badge = entityBadges.get(entity.id);
         if (badge) badge.visible = false;

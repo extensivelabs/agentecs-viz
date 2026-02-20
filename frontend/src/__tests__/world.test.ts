@@ -1265,5 +1265,17 @@ describe("WorldState", () => {
       state.saveQuery({ name: "q", clauses: [] });
       expect(state.savedQueries).toHaveLength(0);
     });
+
+    it("reconnect clears activeQuery but preserves savedQueries", () => {
+      state.setQuery({ name: "", clauses: [{ type: "with", component: "Agent" }] });
+      state.saveQuery({ name: "kept", clauses: [{ type: "with", component: "Task" }] });
+      expect(state.hasActiveFilter).toBe(true);
+      expect(state.savedQueries).toHaveLength(1);
+
+      state.disconnect();
+      expect(state.activeQuery).toBeNull();
+      expect(state.savedQueries).toHaveLength(1);
+      expect(state.savedQueries[0].name).toBe("kept");
+    });
   });
 });

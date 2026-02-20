@@ -155,20 +155,21 @@
         {#if world.savedQueries.length > 0}
           <div class="flex flex-wrap items-center gap-1">
             {#each world.savedQueries as saved (saved.name)}
-              <button
-                class="flex items-center gap-1 rounded border border-bg-tertiary px-1.5 py-0.5 text-[10px] text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
-                onclick={() => world.loadQuery(saved.name)}
-                data-testid="saved-query"
-              >
-                {saved.name}
-                <span
-                  class="text-text-muted hover:text-error"
-                  role="button"
-                  tabindex="0"
-                  onmousedown={(e) => { e.stopPropagation(); world.deleteSavedQuery(saved.name) }}
-                  onkeydown={(e) => { if (e.key === "Enter") world.deleteSavedQuery(saved.name) }}
-                >&times;</span>
-              </button>
+              <div class="flex items-center gap-1">
+                <button
+                  type="button"
+                  class="rounded border border-bg-tertiary px-1.5 py-0.5 text-[10px] text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
+                  onclick={() => world.loadQuery(saved.name)}
+                  data-testid="saved-query"
+                >{saved.name}</button>
+                <button
+                  type="button"
+                  class="text-[10px] leading-none text-text-muted hover:text-error"
+                  aria-label={"Delete saved query " + saved.name}
+                  onclick={() => world.deleteSavedQuery(saved.name)}
+                  data-testid="delete-saved-query"
+                >&times;</button>
+              </div>
             {/each}
           </div>
         {/if}
