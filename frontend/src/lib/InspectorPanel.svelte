@@ -6,6 +6,8 @@
   import type { ComponentChanges } from "./diff";
 
   let entitySpanCount = $derived(world.selectedEntitySpans.length);
+  let entityTokenUsage = $derived(world.selectedEntityTokenUsage);
+  let entityModelTokenUsage = $derived(world.selectedEntityModelTokenUsage);
 
   let expandedSections = $state<Record<string, boolean>>({});
 
@@ -64,6 +66,15 @@
 
   function close(): void {
     world.selectEntity(null);
+  }
+
+  function formatTokens(count: number): string {
+    return count.toLocaleString();
+  }
+
+  function formatCost(costUsd: number): string {
+    if (costUsd >= 1) return `$${costUsd.toFixed(2)}`;
+    return `$${costUsd.toFixed(4)}`;
   }
 </script>
 
@@ -191,11 +202,30 @@
       {/each}
 
       <div class="px-4 py-3" data-testid="traces-section">
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 text-xs">
           <span class="text-xs text-text-muted">
             {entitySpanCount} {entitySpanCount === 1 ? "span" : "spans"}
           </span>
         </div>
+        <div class="mt-1 text-xs text-text-muted" data-testid="entity-token-summary">
+          <span class="text-text-secondary">{formatTokens(entityTokenUsage.total)}</span>
+          <span> tokens</span>
+          <span class="mx-1 text-text-muted/60">|</span>
+          <span class="text-text-secondary">{formatCost(entityTokenUsage.costUsd)}</span>
+          <span> cost</span>
+        </div>
+        {#if entityModelTokenUsage.length > 0}
+          <div class="mt-2 space-y-1" data-testid="entity-model-breakdown">
+            {#each entityModelTokenUsage as modelUsage (modelUsage.model)}
+              <div class="flex items-center justify-between text-xs">
+                <span class="truncate text-text-secondary">{modelUsage.model}</span>
+                <span class="font-mono text-text-muted">
+                  {formatTokens(modelUsage.total)} / {formatCost(modelUsage.costUsd)}
+                </span>
+              </div>
+            {/each}
+          </div>
+        {/if}
       </div>
     </div>
   {:else}

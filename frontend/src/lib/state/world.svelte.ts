@@ -1,5 +1,6 @@
-import { WS_URL } from "../config";
+import { TOKEN_COST_BUDGET_USD, WS_URL } from "../config";
 import { diffEntity, type EntityDiff } from "../diff";
+import { aggregateSpanUsage, type ModelUsageTotals, type SpanUsageTotals } from "../traces";
 import type {
   ArchetypeConfig,
   ConnectionState,
@@ -134,6 +135,30 @@ export class WorldState {
   );
 
   spanCount: number = $derived(this.visibleSpans.length);
+
+  spanUsage: { totals: SpanUsageTotals; byModel: ModelUsageTotals[] } = $derived(
+    aggregateSpanUsage(this.visibleSpans),
+  );
+
+  totalTokenUsage: SpanUsageTotals = $derived(this.spanUsage.totals);
+  modelTokenUsage: ModelUsageTotals[] = $derived(this.spanUsage.byModel);
+
+  selectedEntitySpanUsage: {
+    totals: SpanUsageTotals;
+    byModel: ModelUsageTotals[];
+  } = $derived(aggregateSpanUsage(this.selectedEntitySpans));
+
+  selectedEntityTokenUsage: SpanUsageTotals = $derived(
+    this.selectedEntitySpanUsage.totals,
+  );
+  selectedEntityModelTokenUsage: ModelUsageTotals[] = $derived(
+    this.selectedEntitySpanUsage.byModel,
+  );
+
+  tokenCostBudgetUsd: number = TOKEN_COST_BUDGET_USD;
+  tokenCostBudgetExceeded: boolean = $derived(
+    this.totalTokenUsage.costUsd >= this.tokenCostBudgetUsd,
+  );
 
   selectedEntityDiff: EntityDiff | null = $derived.by(() => {
     if (!this.selectedEntity || !this.previousSnapshot) return null;

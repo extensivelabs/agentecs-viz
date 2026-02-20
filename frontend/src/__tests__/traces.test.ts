@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
+  aggregateSpanUsage,
   detectSpanType,
   getModelName,
+  getSpanCostUsd,
   getTokenCounts,
   getSpanDurationMs,
   buildSpanTree,
@@ -99,6 +101,75 @@ describe("getTokenCounts", () => {
       completion: null,
       total: null,
     });
+  });
+
+  it("supports gen_ai input/output token attributes", () => {
+    const result = getTokenCounts({
+      "gen_ai.usage.input_tokens": 120,
+      "gen_ai.usage.output_tokens": 30,
+    });
+    expect(result).toEqual({ prompt: 120, completion: 30, total: 150 });
+  });
+
+  it("computes total when only one token count is present", () => {
+    const result = getTokenCounts({ "gen_ai.usage.input_tokens": 42 });
+    expect(result).toEqual({ prompt: 42, completion: null, total: 42 });
+  });
+});
+
+describe("getSpanCostUsd", () => {
+  it("uses explicit total cost attribute when present", () => {
+    expect(getSpanCostUsd({ "llm.cost.total": 0.123 })).toBe(0.123);
+  });
+
+  it("sums prompt and completion costs when total missing", () => {
+    expect(
+      getSpanCostUsd({
+        "llm.cost.prompt": 0.02,
+        "llm.cost.completion": 0.03,
+      }),
+    ).toBe(0.05);
+  });
+
+  it("estimates cost from model pricing and token counts", () => {
+    const cost = getSpanCostUsd({
+      "gen_ai.request.model": "gpt-4o",
+      "gen_ai.usage.input_tokens": 1000,
+      "gen_ai.usage.output_tokens": 1000,
+    });
+    expect(cost).toBeCloseTo(0.02);
+  });
+});
+
+describe("aggregateSpanUsage", () => {
+  it("aggregates totals and model breakdown", () => {
+    const spans = [
+      makeSpan({
+        span_id: "a",
+        attributes: {
+          "gen_ai.request.model": "gpt-4o",
+          "gen_ai.usage.input_tokens": 100,
+          "gen_ai.usage.output_tokens": 50,
+        },
+      }),
+      makeSpan({
+        span_id: "b",
+        attributes: {
+          "gen_ai.request.model": "gpt-4o-mini",
+          "llm.cost.total": 0.5,
+          "gen_ai.usage.input_tokens": 10,
+          "gen_ai.usage.output_tokens": 5,
+        },
+      }),
+    ];
+
+    const usage = aggregateSpanUsage(spans);
+    expect(usage.totals.total).toBe(165);
+    expect(usage.totals.prompt).toBe(110);
+    expect(usage.totals.completion).toBe(55);
+    expect(usage.totals.costUsd).toBeGreaterThan(0.5);
+    expect(usage.byModel).toHaveLength(2);
+    expect(usage.byModel[0].model).toBe("gpt-4o-mini");
   });
 });
 

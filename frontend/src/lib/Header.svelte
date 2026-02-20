@@ -41,6 +41,15 @@
     el.focus();
     el.select();
   }
+
+  function formatTokens(count: number): string {
+    return count.toLocaleString();
+  }
+
+  function formatCost(costUsd: number): string {
+    if (costUsd >= 1) return `$${costUsd.toFixed(2)}`;
+    return `$${costUsd.toFixed(4)}`;
+  }
 </script>
 
 <header
@@ -72,6 +81,16 @@
       </span>
       <span class="text-text-muted">|</span>
       <span><span class="font-mono text-text-primary">{world.entityCount}</span> entities</span>
+      <span class="text-text-muted">|</span>
+      <span><span class="font-mono text-text-primary">{formatTokens(world.totalTokenUsage.total)}</span> tokens</span>
+      <span class="text-text-muted">|</span>
+      <span><span class="font-mono text-text-primary">{formatCost(world.totalTokenUsage.costUsd)}</span> cost</span>
+      {#if world.tokenCostBudgetExceeded}
+        <span
+          class="rounded bg-warning/20 px-1.5 py-0.5 text-warning"
+          data-testid="cost-budget-warning"
+        >Budget {formatCost(world.tokenCostBudgetUsd)}</span>
+      {/if}
       {#if world.visibleErrorCount > 0}
         <span class="text-text-muted">|</span>
         <button

@@ -224,7 +224,13 @@ describe("WorldState", () => {
       const msg: DeltaMessage = {
         type: "delta",
         tick: 1,
-        delta: { spawned: [], destroyed: [], modified: [] },
+        delta: {
+          tick: 1,
+          timestamp: 1,
+          spawned: [],
+          destroyed: [],
+          modified: {},
+        },
       };
       MockWebSocket.instances[0].simulateMessage(msg);
       expect(warnSpy).toHaveBeenCalledWith(
@@ -827,6 +833,118 @@ describe("WorldState", () => {
 
       state.selectEntity(1);
       expect(state.selectedEntitySpans).toHaveLength(2);
+    });
+
+    it("computes total token and cost usage from visible spans", () => {
+      const snapshot = makeSnapshot({ tick: 3 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 3,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      MockWebSocket.instances[0].simulateMessage(
+        makeSpanEvent(1, 1, {
+          attributes: {
+            "agentecs.tick": 1,
+            "agentecs.entity_id": 1,
+            "gen_ai.request.model": "gpt-4o",
+            "gen_ai.usage.input_tokens": 100,
+            "gen_ai.usage.output_tokens": 50,
+          },
+        }),
+      );
+      MockWebSocket.instances[0].simulateMessage(
+        makeSpanEvent(2, 2, {
+          attributes: {
+            "agentecs.tick": 2,
+            "agentecs.entity_id": 2,
+            "llm.cost.total": 0.1,
+            "gen_ai.request.model": "gpt-4o-mini",
+            "gen_ai.usage.input_tokens": 25,
+            "gen_ai.usage.output_tokens": 10,
+          },
+        }),
+      );
+
+      expect(state.totalTokenUsage.total).toBe(185);
+      expect(state.totalTokenUsage.prompt).toBe(125);
+      expect(state.totalTokenUsage.completion).toBe(60);
+      expect(state.totalTokenUsage.costUsd).toBeGreaterThanOrEqual(0.1);
+    });
+
+    it("computes selected entity token totals and model breakdown", () => {
+      const snapshot = makeSnapshot({ tick: 5 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 5,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      MockWebSocket.instances[0].simulateMessage(
+        makeSpanEvent(1, 1, {
+          attributes: {
+            "agentecs.tick": 1,
+            "agentecs.entity_id": 1,
+            "gen_ai.request.model": "gpt-4o",
+            "gen_ai.usage.input_tokens": 40,
+            "gen_ai.usage.output_tokens": 10,
+          },
+        }),
+      );
+      MockWebSocket.instances[0].simulateMessage(
+        makeSpanEvent(2, 1, {
+          attributes: {
+            "agentecs.tick": 2,
+            "agentecs.entity_id": 1,
+            "gen_ai.request.model": "gpt-4o",
+            "gen_ai.usage.input_tokens": 10,
+            "gen_ai.usage.output_tokens": 5,
+          },
+        }),
+      );
+      MockWebSocket.instances[0].simulateMessage(
+        makeSpanEvent(2, 2, {
+          attributes: {
+            "agentecs.tick": 2,
+            "agentecs.entity_id": 2,
+            "gen_ai.request.model": "gpt-4o-mini",
+            "gen_ai.usage.input_tokens": 500,
+            "gen_ai.usage.output_tokens": 50,
+          },
+        }),
+      );
+
+      state.selectEntity(1);
+
+      expect(state.selectedEntityTokenUsage.total).toBe(65);
+      expect(state.selectedEntityModelTokenUsage).toHaveLength(1);
+      expect(state.selectedEntityModelTokenUsage[0].model).toBe("gpt-4o");
+      expect(state.selectedEntityModelTokenUsage[0].total).toBe(65);
+    });
+
+    it("flags budget warning when total cost exceeds threshold", () => {
+      const snapshot = makeSnapshot({ tick: 1 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot,
+      } satisfies SnapshotMessage);
+
+      expect(state.tokenCostBudgetExceeded).toBe(false);
+
+      MockWebSocket.instances[0].simulateMessage(
+        makeSpanEvent(1, 1, {
+          attributes: {
+            "agentecs.tick": 1,
+            "agentecs.entity_id": 1,
+            "llm.cost.total": 2,
+          },
+        }),
+      );
+
+      expect(state.totalTokenUsage.costUsd).toBe(2);
+      expect(state.tokenCostBudgetExceeded).toBe(true);
     });
 
     it("selectSpan sets selectedSpanId and selectedSpan", () => {
