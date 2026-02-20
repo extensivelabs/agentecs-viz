@@ -66,6 +66,44 @@ describe("WorldState", () => {
       expect(state.config).toBeNull();
       expect(state.snapshot).toBeNull();
     });
+
+    it("clears stale state when connect() is called", () => {
+      state.connect("ws://test/ws");
+      MockWebSocket.instances[0].simulateOpen();
+
+      // Populate state from first session
+      MockWebSocket.instances[0].simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: makeConfig(),
+        tick_range: [0, 500],
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+      const snap = makeSnapshot({ tick: 500 });
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 500,
+        snapshot: snap,
+      } satisfies SnapshotMessage);
+      MockWebSocket.instances[0].simulateMessage(makeErrorEvent({ tick: 500, entity_id: 1 }));
+      MockWebSocket.instances[0].simulateMessage(makeSpanEvent({ tick: 500 }));
+
+      expect(state.tick).toBe(500);
+      expect(state.errors.length).toBe(1);
+      expect(state.spans.length).toBe(1);
+      expect(state.tickRange).toEqual([0, 500]);
+
+      // Reconnect — state should be cleared immediately
+      state.connect("ws://test/ws");
+      expect(state.snapshot).toBeNull();
+      expect(state.tick).toBe(0);
+      expect(state.config).toBeNull();
+      expect(state.tickRange).toBeNull();
+      expect(state.errors).toEqual([]);
+      expect(state.spans).toEqual([]);
+      expect(state.supportsHistory).toBe(false);
+    });
   });
 
   describe("handleMessage", () => {

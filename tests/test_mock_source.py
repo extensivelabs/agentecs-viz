@@ -135,6 +135,29 @@ class TestMockWorldSource:
         finally:
             await source.disconnect()
 
+    async def test_reconnect_resets_tick_and_history(self):
+        source = MockWorldSource(entity_count=5)
+        await source.connect()
+        try:
+            await source.send_command("pause")
+            for _ in range(5):
+                await source.send_command("step")
+            assert source.get_current_tick() == 5
+            assert source.history.tick_count > 0
+        finally:
+            await source.disconnect()
+
+        # Reconnect should reset
+        await source.connect()
+        try:
+            assert source.get_current_tick() == 0
+            assert source.history.tick_count == 1  # only tick 0
+            tick_range = source.tick_range
+            assert tick_range is not None
+            assert tick_range == (0, 0)
+        finally:
+            await source.disconnect()
+
     async def test_error_generation_over_ticks(
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):

@@ -77,21 +77,23 @@ class TestWebSocket:
 
         from starlette.testclient import TestClient
 
-        async def setup():
-            await source.connect()
-            await source.send_command("pause")
-            for _ in range(5):
-                await source.send_command("step")
-            await source.disconnect()
-
-        asyncio.run(setup())
-
+        # Use direct source API to build history within the server's
+        # lifespan connection (TestClient calls source.connect() which resets).
+        # We step after the server starts using a background task.
         app = create_app(source)
-        with TestClient(app) as tc, tc.websocket_connect("/ws") as ws:
-            ws.receive_json()  # metadata
-            ws.receive_json()  # initial snapshot
+        with TestClient(app) as tc:
+            # Build history on the already-connected source
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(source.send_command("pause"))
+            for _ in range(5):
+                loop.run_until_complete(source.send_command("step"))
+            loop.close()
 
-            ws.send_json({"command": "seek", "tick": 1})
-            resp = ws.receive_json()
-            assert resp["type"] == "snapshot"
-            assert resp["tick"] == 1
+            with tc.websocket_connect("/ws") as ws:
+                ws.receive_json()  # metadata
+                ws.receive_json()  # initial snapshot
+
+                ws.send_json({"command": "seek", "tick": 1})
+                resp = ws.receive_json()
+                assert resp["type"] == "snapshot"
+                assert resp["tick"] == 1

@@ -183,6 +183,8 @@ class MockWorldSource(TickLoopSource):
         return self._history.get_tick_range()
 
     async def _on_connect(self) -> None:
+        self._tick = 0
+        self._history.clear()
         self._entities = self._generate_entities()
         snapshot = self._build_snapshot()
         self._history.record_tick(snapshot)
