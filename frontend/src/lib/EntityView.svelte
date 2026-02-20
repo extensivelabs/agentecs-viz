@@ -5,7 +5,7 @@
   import { world } from "./state/world.svelte";
   import { getArchetypeColor, getArchetypeColorCSS } from "./colors";
   import { getArchetypeKey, getArchetypeDisplay } from "./utils";
-  import { computeLayout } from "./layout";
+  import { computeLayout, PIPELINE_HEADER_Y } from "./layout";
   import type { LayoutMode, LayoutResult, ColumnInfo, EntityPosition } from "./layout";
   import {
     WORLD_SIZE,
@@ -126,6 +126,14 @@
     return world.config?.field_hints?.status_fields ?? ["status", "state", "phase"];
   }
 
+  function cancelAnimation() {
+    if (animFrameId) {
+      cancelAnimationFrame(animFrameId);
+      animFrameId = 0;
+    }
+    animatingFrom = null;
+  }
+
   function recomputeLayout() {
     const tick = world.tick;
     const mode = layoutMode;
@@ -134,6 +142,12 @@
 
     const prevPositions = cachedLayout;
     const modeChanged = mode !== lastLayoutMode && prevPositions.size > 0;
+    const tickChanged = tick !== lastLayoutTick;
+
+    // Cancel in-progress animation if tick changes mid-flight
+    if (tickChanged && animatingFrom) {
+      cancelAnimation();
+    }
 
     cachedLayoutResult = computeLayout(world.entities, mode, getStatusFields());
     cachedLayout = cachedLayoutResult.positions;
@@ -182,16 +196,6 @@
       } else {
         gfx.position.set(to.x, to.y);
       }
-      // Update label and badge positions to follow
-      const label = entityLabels.get(id);
-      if (label?.visible) {
-        label.position.set(gfx.position.x, gfx.position.y - (entityHitRadii.get(id) ?? 12) - 2);
-      }
-      const badge = entityBadges.get(id);
-      if (badge?.visible) {
-        const r = entityHitRadii.get(id) ?? 12;
-        badge.position.set(gfx.position.x + r + 6, gfx.position.y - r - 4);
-      }
     }
   }
 
@@ -201,7 +205,7 @@
       return;
     }
     columnHeaders = cachedLayoutResult.columns.map(col => {
-      const screen = viewport!.toScreen(col.x, 30);
+      const screen = viewport!.toScreen(col.x, PIPELINE_HEADER_Y);
       return { name: col.name, screenX: screen.x, screenY: screen.y, count: col.count };
     });
   }
@@ -209,8 +213,7 @@
   function setLayoutMode(mode: LayoutMode) {
     if (mode === layoutMode) return;
     layoutMode = mode;
-    // Force recompute on next render
-    lastLayoutMode = mode === "spatial" ? "pipeline" : "spatial";
+    lastLayoutTick = -1;
   }
 
   function renderEntities() {
@@ -462,7 +465,7 @@
 
     return () => {
       destroyed = true;
-      if (animFrameId) cancelAnimationFrame(animFrameId);
+      cancelAnimation();
       window.removeEventListener("keydown", onKeyDown);
       resizeObserver.disconnect();
       entityGraphics.clear();

@@ -21,7 +21,7 @@ export interface LayoutResult {
   columns: ColumnInfo[];
 }
 
-const PIPELINE_HEADER_Y = 80;
+export const PIPELINE_HEADER_Y = 80;
 const PIPELINE_COLUMN_PADDING = 40;
 const UNKNOWN_STATUS = "(unknown)";
 
@@ -50,6 +50,12 @@ function spiralPosition(index: number, centerX: number, centerY: number, spacing
 
 function clampToWorld(v: number): number {
   return Math.max(0, Math.min(WORLD_SIZE, v));
+}
+
+function clampToColumn(x: number, colIndex: number, colWidth: number, padding: number): number {
+  const left = colIndex * colWidth + padding;
+  const right = (colIndex + 1) * colWidth - padding;
+  return Math.max(left, Math.min(right, x));
 }
 
 export function getEntityStatusValue(
@@ -197,7 +203,7 @@ export function pipelineLayout(
     for (let j = 0; j < group.length; j++) {
       const pos = spiralPosition(j, colCenterX, spiralCenterY, spacing);
       positions.set(group[j].id, {
-        x: clampToWorld(Math.max(col * colWidth + PIPELINE_COLUMN_PADDING, Math.min((col + 1) * colWidth - PIPELINE_COLUMN_PADDING, pos.x))),
+        x: clampToWorld(clampToColumn(pos.x, col, colWidth, PIPELINE_COLUMN_PADDING)),
         y: clampToWorld(Math.max(contentTop, pos.y)),
       });
     }
