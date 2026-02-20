@@ -271,6 +271,7 @@ export class WorldState {
     this.errorPanelOpen = false;
     this.spans = [];
     this.selectedSpanId = null;
+    this.activeQuery = null;
   }
 
   disconnect(): void {
