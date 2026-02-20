@@ -243,6 +243,7 @@ export class WorldState {
 
   step(): void {
     if (!this.isAtLive && this.supportsHistory) {
+      if (this.tick >= this.maxTick) return;
       this.seek(this.tick + 1);
       return;
     }

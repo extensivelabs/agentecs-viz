@@ -858,6 +858,22 @@ describe("WorldState", () => {
       expect(msg).toEqual({ command: "step" });
     });
 
+    it("step at maxTick transitions to live step", () => {
+      // When tick reaches maxTick, isAtLive becomes true,
+      // so step() falls through to client.step()
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 10,
+        snapshot: makeSnapshot({ tick: 10 }),
+      } satisfies SnapshotMessage);
+
+      expect(state.isAtLive).toBe(true);
+      state.step();
+
+      const msg = JSON.parse(ws.sentMessages[ws.sentMessages.length - 1]);
+      expect(msg).toEqual({ command: "step" });
+    });
+
     it("stepBack auto-pauses when not paused", () => {
       // Make state not paused
       ws.simulateMessage({
