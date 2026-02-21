@@ -39,7 +39,7 @@ class TickLoopSource:
         self._connected = False
         self._paused = False
         self._stop_event: asyncio.Event | None = None
-        self._event_queue: asyncio.Queue[AnyServerEvent] | None = None
+        self._subscribers: set[asyncio.Queue[AnyServerEvent]] = set()
         self._loop_task: asyncio.Task[None] | None = None
 
     @property
@@ -65,7 +65,7 @@ class TickLoopSource:
     async def connect(self) -> None:
         self._connected = True
         self._stop_event = asyncio.Event()
-        self._event_queue = asyncio.Queue(maxsize=self._event_queue_maxsize)
+        self._subscribers = set()
         await self._on_connect()
         self._loop_task = asyncio.create_task(self._run_loop())
 
@@ -78,24 +78,30 @@ class TickLoopSource:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._loop_task
             self._loop_task = None
+        self._subscribers.clear()
 
     async def subscribe(self) -> AsyncIterator[AnyServerEvent]:
-        if not self._stop_event or not self._event_queue:
+        stop_event = self._stop_event
+        if not stop_event:
             return
             yield  # pragma: no cover - makes this a proper empty async generator
 
-        async for event in self._emit_initial_events():
-            yield event
-
-        while not self._stop_event.is_set():
-            try:
-                event = await asyncio.wait_for(
-                    self._event_queue.get(),
-                    timeout=0.1,
-                )
+        queue: asyncio.Queue[AnyServerEvent] = asyncio.Queue(
+            maxsize=self._event_queue_maxsize,
+        )
+        self._subscribers.add(queue)
+        try:
+            async for event in self._emit_initial_events():
                 yield event
-            except TimeoutError:
-                continue
+
+            while not stop_event.is_set():
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    yield event
+                except TimeoutError:
+                    continue
+        finally:
+            self._subscribers.discard(queue)
 
     async def _run_loop(self) -> None:
         while self._connected and self._stop_event and not self._stop_event.is_set():
@@ -110,11 +116,11 @@ class TickLoopSource:
                 continue
 
     async def _emit_event(self, event: AnyServerEvent) -> None:
-        if self._event_queue:
+        for queue in list(self._subscribers):
             try:
-                self._event_queue.put_nowait(event)
+                queue.put_nowait(event)
             except asyncio.QueueFull:
-                logger.warning("Event queue full, dropping event")
+                logger.warning("Subscriber queue full, dropping event")
 
     async def _on_connect(self) -> None:
         """Hook: called during connect, before starting the loop."""
