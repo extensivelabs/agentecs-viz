@@ -280,3 +280,81 @@ class TestMockWorldSource:
             assert len(spans) >= 3
         finally:
             await source.disconnect()
+
+    async def test_two_subscribers_receive_all_events(self, source: MockWorldSource):
+        """Two concurrent subscribers each receive every emitted event."""
+        await source.connect()
+        try:
+            events_a: list[SnapshotMessage] = []
+            events_b: list[SnapshotMessage] = []
+            target = 3
+
+            async def collect(dest: list[SnapshotMessage]):
+                async for event in source.subscribe():
+                    if isinstance(event, SnapshotMessage):
+                        dest.append(event)
+                    if len(dest) >= target:
+                        break
+
+            await asyncio.wait_for(
+                asyncio.gather(collect(events_a), collect(events_b)),
+                timeout=5.0,
+            )
+            assert len(events_a) >= target
+            assert len(events_b) >= target
+            # Both saw the same ticks
+            ticks_a = [e.tick for e in events_a[:target]]
+            ticks_b = [e.tick for e in events_b[:target]]
+            assert ticks_a == ticks_b
+        finally:
+            await source.disconnect()
+
+    async def test_subscriber_cleanup_on_disconnect(self, source: MockWorldSource):
+        """Subscriber queue is removed after the async generator closes."""
+        await source.connect()
+        try:
+            assert len(source._subscribers) == 0
+
+            collected: list[SnapshotMessage] = []
+
+            async def consume_one():
+                async for event in source.subscribe():
+                    if isinstance(event, SnapshotMessage):
+                        collected.append(event)
+                        break
+
+            task = asyncio.create_task(consume_one())
+            # Let the subscriber register
+            await asyncio.sleep(0.05)
+            assert len(source._subscribers) == 1
+
+            await asyncio.wait_for(task, timeout=5.0)
+            # Allow generator cleanup to complete
+            await asyncio.sleep(0)
+            assert len(collected) == 1
+            assert len(source._subscribers) == 0
+        finally:
+            await source.disconnect()
+
+    async def test_subscriber_queue_full_drops_event(self, caplog: pytest.LogCaptureFixture):
+        """When a subscriber queue is full, events are dropped with a warning."""
+        source = MockWorldSource(entity_count=5, tick_interval=0.1)
+        source._event_queue_maxsize = 1
+        await source.connect()
+        try:
+            await source.send_command("pause")
+
+            # Register a subscriber queue without consuming from it
+            queue: asyncio.Queue[SnapshotMessage] = asyncio.Queue(maxsize=1)
+            source._subscribers.add(queue)  # type: ignore[arg-type]
+
+            # Emit enough events to overflow the tiny queue
+            snapshot = await source.get_snapshot()
+            msg = SnapshotMessage(tick=snapshot.tick, snapshot=snapshot)
+            await source._emit_event(msg)  # fills queue (size 1)
+            await source._emit_event(msg)  # overflow -> warning
+
+            assert "Subscriber queue full" in caplog.text
+            source._subscribers.discard(queue)  # type: ignore[arg-type]
+        finally:
+            await source.disconnect()
