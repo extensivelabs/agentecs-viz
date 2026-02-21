@@ -318,9 +318,6 @@ export class WorldState {
 
   stepBack(): void {
     if (!this.canScrub || this.tick <= this.minTick) return;
-    if (!this.isPaused) {
-      this.pause();
-    }
     this.seek(this.tick - 1);
   }
 
@@ -334,7 +331,8 @@ export class WorldState {
 
   seek(tick: number): void {
     if (!this.isPaused && !this.isReplayPlaying) {
-      this.pause();
+      this.isPaused = true;
+      this.client?.pause();
     }
     this.client?.seek(tick);
   }

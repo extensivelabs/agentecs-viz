@@ -450,7 +450,7 @@ class MockWorldSource(TickLoopSource):
         spans.append(llm)
         cursor = llm.end_time + random.uniform(0.01, 0.03)
 
-        # Tool call(s) nested under the LLM conceptually but parented to root for visibility
+        # Tool calls parented under the initial LLM span
         tool_count = random.randint(1, 3)
         for i in range(tool_count):
             tool_dur = random.uniform(0.1, 0.6)
