@@ -290,6 +290,7 @@ class TestMockWorldSource:
         """Two concurrent subscribers each receive every emitted event."""
         await source.connect()
         try:
+            await source.send_command("pause")
             events_a: list[SnapshotMessage] = []
             events_b: list[SnapshotMessage] = []
             target = 3
@@ -301,13 +302,18 @@ class TestMockWorldSource:
                     if len(dest) >= target:
                         break
 
-            await asyncio.wait_for(
-                asyncio.gather(collect(events_a), collect(events_b)),
-                timeout=5.0,
-            )
+            # Start both collectors, wait for registration
+            task = asyncio.gather(collect(events_a), collect(events_b))
+            while len(source._subscribers) < 2:
+                await asyncio.sleep(0)
+
+            # Deterministically step to produce events
+            for _ in range(target):
+                await source.send_command("step")
+
+            await asyncio.wait_for(task, timeout=5.0)
             assert len(events_a) >= target
             assert len(events_b) >= target
-            # Both saw the same ticks
             ticks_a = [e.tick for e in events_a[:target]]
             ticks_b = [e.tick for e in events_b[:target]]
             assert ticks_a == ticks_b

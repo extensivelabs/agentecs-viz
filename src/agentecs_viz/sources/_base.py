@@ -81,7 +81,8 @@ class TickLoopSource:
         self._subscribers.clear()
 
     async def subscribe(self) -> AsyncIterator[AnyServerEvent]:
-        if not self._stop_event:
+        stop_event = self._stop_event
+        if not stop_event:
             return
             yield  # pragma: no cover - makes this a proper empty async generator
 
@@ -93,7 +94,7 @@ class TickLoopSource:
             async for event in self._emit_initial_events():
                 yield event
 
-            while not self._stop_event.is_set():
+            while not stop_event.is_set():
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=0.1)
                     yield event
