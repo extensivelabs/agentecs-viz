@@ -201,13 +201,12 @@ class InMemoryHistoryStore:
     def get_errors(self, start_tick: int, end_tick: int) -> list[ErrorEventMessage]:
         """Return all errors in [start_tick, end_tick] inclusive."""
         result: list[ErrorEventMessage] = []
-        for tick in self._tick_order:
+        for tick in sorted(self._errors):
             if tick < start_tick:
                 continue
             if tick > end_tick:
                 break
-            if tick in self._errors:
-                result.extend(self._errors[tick])
+            result.extend(self._errors[tick])
         return result
 
     def get_errors_for_entity(
@@ -225,13 +224,12 @@ class InMemoryHistoryStore:
     def get_spans(self, start_tick: int, end_tick: int) -> list[SpanEventMessage]:
         """Return all spans in [start_tick, end_tick] inclusive."""
         result: list[SpanEventMessage] = []
-        for tick in self._tick_order:
+        for tick in sorted(self._spans):
             if tick < start_tick:
                 continue
             if tick > end_tick:
                 break
-            if tick in self._spans:
-                result.extend(self._spans[tick])
+            result.extend(self._spans[tick])
         return result
 
     def get_spans_for_entity(
