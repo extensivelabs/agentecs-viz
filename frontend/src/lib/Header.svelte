@@ -49,12 +49,12 @@
   class="flex h-12 shrink-0 items-center gap-4 border-b border-bg-tertiary bg-bg-secondary px-4"
 >
   <div class="flex items-center gap-2">
-    <span class="text-sm font-semibold text-accent">AE</span>
-    <span class="text-sm font-medium text-text-primary">{world.worldName}</span>
+    <span class="text-base font-semibold text-accent">AE</span>
+    <span class="text-base font-medium text-text-primary">{world.worldName}</span>
   </div>
 
   {#if world.isConnected}
-    <div class="flex items-center gap-3 text-xs text-text-secondary">
+    <div class="flex items-center gap-3 text-sm text-text-secondary">
       <span class="flex items-center gap-1">Tick
         {#if isEditingTick}
           <input
@@ -109,6 +109,6 @@
       class:bg-error={world.connectionState === "error"}
       class:bg-text-muted={world.connectionState === "disconnected"}
     ></span>
-    <span class="text-xs text-text-muted">{world.connectionState}</span>
+    <span class="text-sm text-text-muted">{world.connectionState}</span>
   </div>
 </header>

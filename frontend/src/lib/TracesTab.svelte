@@ -101,14 +101,14 @@
   <div class="min-w-0 flex-1 overflow-y-auto">
     {#if entityFilter}
       <div
-        class="flex items-center gap-2 border-b border-bg-tertiary px-4 py-1.5"
+        class="flex items-center gap-2 border-b border-bg-tertiary px-4 py-2"
         data-testid="entity-filter-bar"
       >
-        <span class="text-xs text-text-muted">
+        <span class="text-sm text-text-muted">
           Filtered: Entity #{world.selectedEntityId}
         </span>
         <button
-          class="text-xs text-text-secondary hover:text-text-primary"
+          class="text-sm text-text-secondary hover:text-text-primary"
           onclick={() => world.selectEntity(null)}
         >
           Clear
@@ -118,7 +118,7 @@
 
     {#if displaySpans.length === 0}
       <div
-        class="flex h-full items-center justify-center text-sm text-text-muted"
+        class="flex h-full items-center justify-center text-base text-text-muted"
         data-testid="traces-empty"
       >
         No spans recorded
@@ -129,7 +129,7 @@
         {@const flat = flattenTree(tree)}
         {@const range = tickTimeRange(tickSpans)}
         <div class="border-b border-bg-tertiary">
-          <div class="px-4 py-1 text-[10px] font-medium text-text-muted">
+          <div class="px-4 py-1.5 text-xs font-medium text-text-muted">
             Tick {tick}
             <span class="ml-1 text-text-muted/50">
               ({tickSpans.length} {tickSpans.length === 1 ? "span" : "spans"})
@@ -140,13 +140,13 @@
             {@const duration = getSpanDurationMs(node.span)}
             {@const isSelected = node.span.span_id === world.selectedSpanId}
             <button
-              class="flex w-full items-center gap-2 px-4 py-1 text-left text-xs hover:bg-bg-tertiary/50 {isSelected ? 'bg-accent/10' : ''}"
-              style:padding-left={`${16 + node.depth * 16}px`}
+              class="flex w-full items-center gap-2 px-4 py-1.5 text-left text-sm hover:bg-bg-tertiary/50 {isSelected ? 'bg-accent/10' : ''}"
+              style:padding-left={`${20 + node.depth * 20}px`}
               onclick={() => world.selectSpan(node.span.span_id)}
               data-testid="span-row"
             >
               <span
-                class="inline-block shrink-0 rounded px-1 py-0.5 text-[10px] font-medium text-white"
+                class="inline-block shrink-0 rounded px-1.5 py-0.5 text-xs font-medium text-white"
                 style:background-color={SPAN_TYPE_COLORS[type]}
               >
                 {spanTypeLabel(type)}
@@ -157,7 +157,7 @@
               <span class="shrink-0 text-text-muted">
                 {formatDuration(duration)}
               </span>
-              <div class="relative ml-auto h-3 w-24 shrink-0 rounded bg-bg-tertiary">
+              <div class="relative ml-auto h-3.5 w-28 shrink-0 rounded bg-bg-tertiary">
                 <div
                   class="absolute top-0 h-full rounded opacity-70"
                   style="{barStyle(node.span, range)} background-color: {SPAN_TYPE_COLORS[type]};"
@@ -180,23 +180,23 @@
           <span
             class="inline-block h-2 w-2 rounded-full {statusDotColor(selectedSpan.status)}"
           ></span>
-          <span class="text-sm font-medium text-text-primary">
+          <span class="text-base font-medium text-text-primary">
             {selectedSpan.name}
           </span>
         </div>
         <div class="mt-1 flex items-center gap-2">
           {#if selectedSpanType}
             <span
-              class="rounded px-1 py-0.5 text-[10px] font-medium text-white"
+              class="rounded px-1.5 py-0.5 text-xs font-medium text-white"
               style:background-color={SPAN_TYPE_COLORS[selectedSpanType]}
             >
               {spanTypeLabel(selectedSpanType)}
             </span>
           {/if}
-          <span class="text-xs text-text-muted">
+          <span class="text-sm text-text-muted">
             {formatDuration(getSpanDurationMs(selectedSpan))}
           </span>
-          <span class="text-xs text-text-muted/50">
+          <span class="text-sm text-text-muted/50">
             {selectedSpan.status}
           </span>
         </div>
@@ -207,13 +207,13 @@
           <div class="border-b border-bg-tertiary px-4 py-2" data-testid="llm-detail">
             {#if selectedSpanModel}
               <div class="mb-2">
-                <span class="rounded-full bg-purple-500/20 px-2 py-0.5 text-xs text-purple-400">
+                <span class="rounded-full bg-purple-500/20 px-2.5 py-0.5 text-sm text-purple-400">
                   {selectedSpanModel}
                 </span>
               </div>
             {/if}
             {#if selectedSpanTokens && selectedSpanTokens.total !== null}
-              <div class="flex gap-3 text-xs text-text-muted">
+              <div class="flex gap-3 text-sm text-text-muted">
                 <span>Prompt: <span class="text-text-secondary">{selectedSpanTokens.prompt}</span></span>
                 <span>Completion: <span class="text-text-secondary">{selectedSpanTokens.completion}</span></span>
                 <span>Total: <span class="text-text-secondary">{selectedSpanTokens.total}</span></span>
@@ -222,12 +222,12 @@
             {#if selectedSpan.attributes["gen_ai.request.messages"]}
               {@const msgs = spanMessages(selectedSpan)}
               <div class="mt-2">
-                <div class="mb-1 text-[10px] font-medium text-text-muted">Messages</div>
+                <div class="mb-1 text-xs font-medium text-text-muted">Messages</div>
                 {#each msgs as msg, i (i)}
                   <div
-                    class="mb-1 rounded px-2 py-1 text-xs {msg.role === 'user' ? 'bg-accent/10' : msg.role === 'assistant' ? 'bg-purple-500/10' : 'bg-bg-tertiary'}"
+                    class="mb-1 rounded px-2 py-1.5 text-sm {msg.role === 'user' ? 'bg-accent/10' : msg.role === 'assistant' ? 'bg-purple-500/10' : 'bg-bg-tertiary'}"
                   >
-                    <span class="text-[10px] font-medium text-text-muted">{msg.role}</span>
+                    <span class="text-xs font-medium text-text-muted">{msg.role}</span>
                     <div class="text-text-secondary">{msg.content}</div>
                   </div>
                 {/each}
@@ -240,19 +240,19 @@
           <div class="border-b border-bg-tertiary px-4 py-2" data-testid="tool-detail">
             {#if selectedSpan.attributes["tool.name"]}
               <div class="mb-2">
-                <span class="rounded-full bg-cyan-500/20 px-2 py-0.5 text-xs text-cyan-400">
+                <span class="rounded-full bg-cyan-500/20 px-2.5 py-0.5 text-sm text-cyan-400">
                   {selectedSpan.attributes["tool.name"]}
                 </span>
               </div>
             {/if}
             {#if selectedSpan.attributes["tool.input"]}
-              <div class="mb-1 text-[10px] font-medium text-text-muted">Input</div>
+              <div class="mb-1 text-xs font-medium text-text-muted">Input</div>
               <div class="mb-2">
                 <JsonTree data={selectedSpan.attributes["tool.input"] as Record<string, unknown>} />
               </div>
             {/if}
             {#if selectedSpan.attributes["tool.output"]}
-              <div class="mb-1 text-[10px] font-medium text-text-muted">Output</div>
+              <div class="mb-1 text-xs font-medium text-text-muted">Output</div>
               <div>
                 <JsonTree data={selectedSpan.attributes["tool.output"] as Record<string, unknown>} />
               </div>
@@ -263,7 +263,7 @@
         {#if selectedSpanType === "system"}
           <div class="border-b border-bg-tertiary px-4 py-2" data-testid="system-detail">
             {#if selectedSpan.attributes["agentecs.system"]}
-              <span class="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-400">
+              <span class="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-sm text-amber-400">
                 {selectedSpan.attributes["agentecs.system"]}
               </span>
             {/if}
@@ -271,13 +271,13 @@
         {/if}
 
         <div class="px-4 py-2">
-          <div class="mb-1 text-[10px] font-medium text-text-muted">Attributes</div>
+          <div class="mb-1 text-xs font-medium text-text-muted">Attributes</div>
           <JsonTree data={selectedSpan.attributes as Record<string, unknown>} />
         </div>
       </div>
     {:else}
       <div
-        class="flex flex-1 items-center justify-center text-xs text-text-muted"
+        class="flex flex-1 items-center justify-center text-sm text-text-muted"
         data-testid="span-detail-empty"
       >
         Select a span to view details

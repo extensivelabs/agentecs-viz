@@ -319,7 +319,7 @@
           label = new Text({
             text: `${entity.id}`,
             style: new TextStyle({
-              fontSize: 10,
+              fontSize: 12,
               fill: 0xcccccc,
               fontFamily: "monospace",
             }),
@@ -344,7 +344,7 @@
           badge = new Text({
             text: "",
             style: new TextStyle({
-              fontSize: 8,
+              fontSize: 10,
               fill: CHANGED_RING_COLOR,
               fontFamily: "monospace",
             }),
@@ -441,7 +441,7 @@
         .pinch()
         .wheel()
         .decelerate()
-        .clampZoom({ minScale: 0.1, maxScale: 4 });
+        .clampZoom({ minScale: 0.15, maxScale: 5 });
 
       app.stage.addChild(viewport);
 
@@ -514,11 +514,11 @@
   <div bind:this={containerEl} class="h-full w-full"></div>
 
   <!-- Layout mode + view level toggle -->
-  <div class="absolute right-3 top-3 flex items-center gap-3 text-xs">
-    <div class="flex items-center gap-1 rounded bg-bg-secondary/90 px-2 py-1" data-testid="layout-mode-toggle">
+  <div class="absolute right-3 top-3 flex items-center gap-3 text-sm">
+    <div class="flex items-center gap-1 rounded bg-bg-secondary/90 px-2.5 py-1.5" data-testid="layout-mode-toggle">
       {#each (["spatial", "pipeline"] as const) as mode}
         <button
-          class="rounded px-1.5 py-0.5 capitalize"
+          class="rounded px-2 py-0.5 capitalize"
           class:bg-accent={layoutMode === mode}
           class:text-bg-primary={layoutMode === mode}
           class:text-text-secondary={layoutMode !== mode}
@@ -530,10 +530,10 @@
         </button>
       {/each}
     </div>
-    <div class="flex items-center gap-1 rounded bg-bg-secondary/90 px-2 py-1">
+    <div class="flex items-center gap-1 rounded bg-bg-secondary/90 px-2.5 py-1.5">
       {#each (["detail", "auto", "overview"] as const) as level}
         <button
-          class="rounded px-1.5 py-0.5 capitalize"
+          class="rounded px-2 py-0.5 capitalize"
           class:bg-accent={viewLevelOverride === level}
           class:text-bg-primary={viewLevelOverride === level}
           class:text-text-secondary={viewLevelOverride !== level}
@@ -555,10 +555,10 @@
           style:left={col.screenX + "px"}
           style:top={Math.max(4, col.screenY) + "px"}
         >
-          <span class="rounded bg-bg-secondary/90 px-2 py-0.5 text-xs font-medium text-text-primary">
+          <span class="rounded bg-bg-secondary/90 px-2.5 py-1 text-sm font-medium text-text-primary">
             {col.name}
           </span>
-          <span class="mt-0.5 text-[10px] text-text-muted">({col.count})</span>
+          <span class="mt-0.5 text-xs text-text-muted">({col.count})</span>
         </div>
       {/each}
     </div>
@@ -566,7 +566,7 @@
 
   <!-- Archetype legend -->
   {#if archetypeCounts.length > 0}
-    <div class="absolute bottom-3 left-3 max-h-48 overflow-y-auto rounded bg-bg-secondary/90 px-3 py-2 text-xs">
+    <div class="absolute bottom-3 left-3 max-h-48 overflow-y-auto rounded bg-bg-secondary/90 px-3 py-2 text-sm">
       {#each archetypeCounts as { display, color, count }}
         <div class="flex items-center gap-2 py-0.5">
           <span
@@ -583,19 +583,19 @@
   <!-- Zoom controls -->
   <div class="absolute bottom-3 right-3 flex flex-col gap-1">
     <button
-      class="flex h-7 w-7 items-center justify-center rounded bg-bg-secondary/90 text-sm text-text-secondary hover:text-text-primary"
+      class="flex h-8 w-8 items-center justify-center rounded bg-bg-secondary/90 text-base text-text-secondary hover:text-text-primary"
       onclick={() => viewport?.zoomPercent(0.5, true)}
       title="Zoom in"
       aria-label="Zoom in"
     >+</button>
     <button
-      class="flex h-7 w-7 items-center justify-center rounded bg-bg-secondary/90 text-sm text-text-secondary hover:text-text-primary"
+      class="flex h-8 w-8 items-center justify-center rounded bg-bg-secondary/90 text-base text-text-secondary hover:text-text-primary"
       onclick={() => viewport?.zoomPercent(-0.33, true)}
       title="Zoom out"
       aria-label="Zoom out"
     >&minus;</button>
     <button
-      class="flex h-7 w-7 items-center justify-center rounded bg-bg-secondary/90 text-sm text-text-secondary hover:text-text-primary"
+      class="flex h-8 w-8 items-center justify-center rounded bg-bg-secondary/90 text-base text-text-secondary hover:text-text-primary"
       onclick={() => { fitToEntities(); updateViewLevel(); }}
       title="Reset view"
       aria-label="Reset view"
@@ -605,7 +605,7 @@
   <!-- Tooltip -->
   {#if tooltipVisible}
     <div
-      class="pointer-events-none absolute z-50 whitespace-pre rounded bg-bg-secondary px-2 py-1 text-xs text-text-primary shadow-lg"
+      class="pointer-events-none absolute z-50 whitespace-pre rounded bg-bg-secondary px-3 py-1.5 text-sm text-text-primary shadow-lg"
       style:left={tooltipX + "px"}
       style:top={tooltipY + "px"}
     >

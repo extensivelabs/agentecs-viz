@@ -16,7 +16,7 @@
 </script>
 
 <footer
-  class="flex h-6 shrink-0 items-center justify-between border-t border-bg-tertiary bg-bg-secondary px-4 text-xs text-text-muted"
+  class="flex h-7 shrink-0 items-center justify-between border-t border-bg-tertiary bg-bg-secondary px-4 text-sm text-text-muted"
 >
   <span>{world.connectionState === "connected" ? "Connected" : world.connectionState}</span>
 

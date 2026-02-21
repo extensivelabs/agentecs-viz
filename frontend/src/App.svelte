@@ -64,15 +64,15 @@
             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
           ></path>
         </svg>
-        <span class="text-sm">Connecting...</span>
+        <span class="text-base">Connecting...</span>
       </div>
     </div>
 
   {:else if world.connectionState === "error"}
     <div class="flex flex-1 flex-col items-center justify-center gap-3 text-text-muted">
-      <span class="text-error text-sm">Connection failed</span>
+      <span class="text-error text-base">Connection failed</span>
       <button
-        class="rounded border border-bg-tertiary px-3 py-1 text-xs text-text-secondary hover:bg-bg-tertiary"
+        class="rounded border border-bg-tertiary px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-tertiary"
         onclick={() => world.connect()}
       >
         Retry
@@ -81,7 +81,7 @@
 
   {:else if world.connectionState === "disconnected"}
     <div class="flex flex-1 items-center justify-center text-text-muted">
-      <span class="text-sm">Not connected</span>
+      <span class="text-base">Not connected</span>
     </div>
 
   {:else}
@@ -89,9 +89,9 @@
       <div
         class="flex items-center gap-2 border-b border-error/20 bg-error/10 px-4 py-1.5"
       >
-        <span class="text-xs text-error">{world.lastError}</span>
+        <span class="text-sm text-error">{world.lastError}</span>
         <button
-          class="ml-auto text-xs text-text-muted hover:text-text-secondary"
+          class="ml-auto text-sm text-text-muted hover:text-text-secondary"
           onclick={() => (world.lastError = null)}
         >
           dismiss
@@ -117,15 +117,15 @@
       {:else if activeTab === "traces"}
         <TracesTab />
       {:else if activeTab === "timeline"}
-        <div class="flex h-full items-center justify-center text-text-muted text-sm">
+        <div class="flex h-full items-center justify-center text-text-muted text-base">
           Timeline Analysis (REQ-015)
         </div>
       {:else if activeTab === "archetypes"}
-        <div class="flex h-full items-center justify-center text-text-muted text-sm">
+        <div class="flex h-full items-center justify-center text-text-muted text-base">
           Archetypes View (REQ-017)
         </div>
       {:else if activeTab === "chat"}
-        <div class="flex h-full items-center justify-center text-text-muted text-sm">
+        <div class="flex h-full items-center justify-center text-text-muted text-base">
           Chat View
         </div>
       {/if}

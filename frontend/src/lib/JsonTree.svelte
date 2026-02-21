@@ -86,7 +86,7 @@
   }
 </script>
 
-<div class="font-mono text-xs" data-testid="json-tree">
+<div class="font-mono text-sm" data-testid="json-tree">
   {#each sortedKeys(data) as key (key)}
     {@const value = data[key]}
     {@const fieldChange = getFieldChange(key)}
