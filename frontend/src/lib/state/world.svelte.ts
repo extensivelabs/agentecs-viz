@@ -1,5 +1,10 @@
 import { TOKEN_COST_BUDGET_USD, WS_URL } from "../config";
 import { diffEntity, type EntityDiff } from "../diff";
+import {
+  getAvailableComponents,
+  matchingEntityIds,
+  type QueryDef,
+} from "../query";
 import { aggregateSpanUsage, type ModelUsageTotals, type SpanUsageTotals } from "../traces";
 import type {
   ArchetypeConfig,
@@ -35,6 +40,9 @@ export class WorldState {
 
   spans: SpanEventMessage[] = $state([]);
   selectedSpanId: string | null = $state(null);
+
+  activeQuery: QueryDef | null = $state(null);
+  savedQueries: QueryDef[] = $state([]);
 
   previousSnapshot: WorldSnapshot | null = $state(null);
   pinnedEntityState: Map<number, EntitySnapshot> | null = $state(null);
@@ -160,6 +168,22 @@ export class WorldState {
     this.totalTokenUsage.costUsd >= this.tokenCostBudgetUsd,
   );
 
+  availableComponents: string[] = $derived(
+    getAvailableComponents(this.entities),
+  );
+
+  matchingEntityIds: Set<number> = $derived(
+    this.activeQuery && this.activeQuery.clauses.length > 0
+      ? matchingEntityIds(this.entities, this.activeQuery)
+      : new Set<number>(),
+  );
+
+  hasActiveFilter: boolean = $derived(
+    this.activeQuery !== null && this.activeQuery.clauses.length > 0,
+  );
+
+  matchCount: number = $derived(this.matchingEntityIds.size);
+
   selectedEntityDiff: EntityDiff | null = $derived.by(() => {
     if (!this.selectedEntity || !this.previousSnapshot) return null;
     const prev = this.previousSnapshot.entities.find(
@@ -247,6 +271,7 @@ export class WorldState {
     this.errorPanelOpen = false;
     this.spans = [];
     this.selectedSpanId = null;
+    this.activeQuery = null;
   }
 
   disconnect(): void {
@@ -352,6 +377,43 @@ export class WorldState {
   clearPinnedState(): void {
     this.pinnedEntityState = null;
     this.pinnedTick = null;
+  }
+
+  setQuery(query: QueryDef | null): void {
+    this.activeQuery = query;
+  }
+
+  clearQuery(): void {
+    this.activeQuery = null;
+  }
+
+  saveQuery(query: QueryDef): void {
+    const name = query.name.trim();
+    if (!name || query.clauses.length === 0) return;
+    const normalized = { ...query, name };
+    const existing = this.savedQueries.findIndex((q) => q.name === name);
+    if (existing >= 0) {
+      this.savedQueries = [
+        ...this.savedQueries.slice(0, existing),
+        normalized,
+        ...this.savedQueries.slice(existing + 1),
+      ];
+    } else {
+      this.savedQueries = [...this.savedQueries, normalized];
+    }
+  }
+
+  deleteSavedQuery(name: string): void {
+    const trimmed = name.trim();
+    this.savedQueries = this.savedQueries.filter((q) => q.name !== trimmed);
+  }
+
+  loadQuery(name: string): void {
+    const trimmed = name.trim();
+    const query = this.savedQueries.find((q) => q.name === trimmed);
+    if (query) {
+      this.activeQuery = { ...query, clauses: [...query.clauses] };
+    }
   }
 
   private handleMessage(msg: ServerMessage): void {

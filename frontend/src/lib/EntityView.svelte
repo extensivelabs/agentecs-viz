@@ -227,6 +227,8 @@
     const selectedId = world.selectedEntityId;
     const showLabels = isDetail && viewport.scaled >= LABEL_ZOOM_THRESHOLD;
     const maxR = adaptiveMaxRadius(entities.length);
+    const filtering = world.hasActiveFilter;
+    const matchIds = world.matchingEntityIds;
 
     const activeIds = new Set<number>();
 
@@ -307,6 +309,9 @@
         entityHitRadii.set(entity.id, hitRadius);
       }
 
+      const dimmed = filtering && !matchIds.has(entity.id);
+      gfx.alpha = dimmed ? 0.15 : 1;
+
       // Labels
       if (showLabels && !animatingFrom) {
         let label = entityLabels.get(entity.id);
@@ -325,6 +330,7 @@
         }
         label.position.set(pos.x, pos.y - radius - 2);
         label.visible = true;
+        label.alpha = dimmed ? 0.15 : 1;
       } else {
         const label = entityLabels.get(entity.id);
         if (label) label.visible = false;
@@ -350,6 +356,7 @@
         badge.text = `${diffCount}`;
         badge.position.set(pos.x + radius + 6, pos.y - radius - 4);
         badge.visible = true;
+        badge.alpha = dimmed ? 0.15 : 1;
       } else {
         const badge = entityBadges.get(entity.id);
         if (badge) badge.visible = false;
@@ -488,6 +495,8 @@
     void world.entityDiffCounts;
     void world.errorEntityIds;
     void world.pastErrorEntityIds;
+    void world.hasActiveFilter;
+    void world.matchingEntityIds;
     void currentViewLevel;
     void layoutMode;
 
