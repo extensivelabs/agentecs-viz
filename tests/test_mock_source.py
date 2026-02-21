@@ -286,6 +286,59 @@ class TestMockWorldSource:
         finally:
             await source.disconnect()
 
+    async def test_multiple_systems_per_tick(
+        self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Each tick generates spans for multiple systems with distinct traces."""
+        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
+        await source.connect()
+        try:
+            await source.send_command("pause")
+            await source.send_command("step")
+
+            spans = source.history.get_spans(1, 1)
+            root_spans = [s for s in spans if s.parent_span_id is None]
+            system_names = {s.attributes.get("agentecs.system") for s in root_spans}
+            # All 5 systems should have root spans
+            assert len(root_spans) == 5
+            assert system_names == {
+                "PerceptionSystem",
+                "GoalPlanner",
+                "TaskScheduler",
+                "MemoryConsolidation",
+                "MovementSystem",
+            }
+            # Each root span has a unique trace_id
+            trace_ids = [s.trace_id for s in root_spans]
+            assert len(set(trace_ids)) == 5
+        finally:
+            await source.disconnect()
+
+    async def test_parallel_systems_overlap_in_time(
+        self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Systems within the same execution group have overlapping time ranges."""
+        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
+        await source.connect()
+        try:
+            await source.send_command("pause")
+            await source.send_command("step")
+
+            spans = source.history.get_spans(1, 1)
+            root_spans = [s for s in spans if s.parent_span_id is None]
+            by_system = {s.attributes["agentecs.system"]: s for s in root_spans}
+
+            # GoalPlanner and TaskScheduler are in the same group — overlapping starts
+            gp = by_system["GoalPlanner"]
+            ts = by_system["TaskScheduler"]
+            assert abs(gp.start_time - ts.start_time) < 0.01
+
+            # PerceptionSystem (group 1) finishes before GoalPlanner (group 2) starts
+            ps = by_system["PerceptionSystem"]
+            assert ps.end_time <= gp.start_time
+        finally:
+            await source.disconnect()
+
     async def test_two_subscribers_receive_all_events(self, source: MockWorldSource):
         """Two concurrent subscribers each receive every emitted event."""
         await source.connect()

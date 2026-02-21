@@ -25,8 +25,6 @@ ENTITY_DESPAWN_PROBABILITY = 0.02
 MAX_ENTITY_MULTIPLIER = 1.5
 MIN_ENTITY_COUNT = 10
 ERROR_PROBABILITY = 0.10
-SPAN_PROBABILITY = 0.30
-
 SYSTEM_NAMES = [
     "MovementSystem",
     "TaskScheduler",
@@ -34,6 +32,17 @@ SYSTEM_NAMES = [
     "GoalPlanner",
     "PerceptionSystem",
 ]
+
+# Ordered execution groups — sequential between groups, parallel within.
+EXECUTION_GROUPS: list[list[str]] = [
+    ["PerceptionSystem"],
+    ["GoalPlanner", "TaskScheduler"],
+    ["MemoryConsolidation"],
+    ["MovementSystem"],
+]
+
+# Systems that generate LLM/tool child spans.
+COMPLEX_SYSTEMS: set[str] = {"GoalPlanner", "TaskScheduler", "MemoryConsolidation"}
 
 LLM_MODELS = ["gpt-4o", "claude-sonnet-4-20250514", "gpt-4o-mini"]
 
@@ -236,7 +245,7 @@ class MockWorldSource(TickLoopSource):
             self._history.record_error(error)
             await self._emit_event(error)
 
-        if self._entities and random.random() < SPAN_PROBABILITY:
+        if self._entities:
             await self._generate_spans()
 
     def _build_snapshot(self) -> WorldSnapshot:
@@ -285,71 +294,89 @@ class MockWorldSource(TickLoopSource):
         return {"value": random.random()}
 
     async def _generate_spans(self) -> None:
+        """Generate spans for all systems in execution group order.
+
+        Systems within the same group run in parallel (overlapping start times).
+        Groups execute sequentially.
+        """
         agent_entities = [
             e for e in self._entities if any(c.type_short == "Agent" for c in e.components)
         ]
         if not agent_entities:
             return
 
-        entity = random.choice(agent_entities)
-        trace_id = uuid.uuid4().hex
-        root_span_id = uuid.uuid4().hex
         now = time.time()
-        system_name = random.choice(SYSTEM_NAMES)
-
-        all_spans: list[SpanEventMessage] = []
         cursor = now
+        all_spans: list[SpanEventMessage] = []
 
-        # Pick a trace pattern: simple (40%), medium (35%), deep (25%)
-        roll = random.random()
-        if roll < 0.40:
-            child_count = random.randint(1, 2)
-            cursor = self._generate_child_spans(
-                all_spans,
-                trace_id,
-                root_span_id,
-                entity.id,
-                cursor,
-                child_count,
-                depth=0,
-            )
-        elif roll < 0.75:
-            child_count = random.randint(3, 5)
-            cursor = self._generate_child_spans(
-                all_spans,
-                trace_id,
-                root_span_id,
-                entity.id,
-                cursor,
-                child_count,
-                depth=0,
-            )
-        else:
-            cursor = self._generate_deep_trace(
-                all_spans,
-                trace_id,
-                root_span_id,
-                entity.id,
-                cursor,
-            )
+        for group in EXECUTION_GROUPS:
+            group_start = cursor
+            group_end = group_start
 
-        total_duration = cursor - now
-        has_error = any(s.status == SpanStatus.error for s in all_spans)
-        root_span = SpanEventMessage(
-            span_id=root_span_id,
-            trace_id=trace_id,
-            name=system_name,
-            start_time=now,
-            end_time=now + total_duration,
-            status=SpanStatus.error if has_error else SpanStatus.ok,
-            attributes={
-                "agentecs.tick": self._tick,
-                "agentecs.entity_id": entity.id,
-                "agentecs.system": system_name,
-            },
-        )
+            for system_name in group:
+                entity = random.choice(agent_entities)
+                trace_id = uuid.uuid4().hex
+                root_span_id = uuid.uuid4().hex
+                # Parallel systems start at roughly the same time
+                sys_start = group_start + random.uniform(0, 0.005)
 
-        all_spans.insert(0, root_span)
+                if system_name in COMPLEX_SYSTEMS:
+                    children: list[SpanEventMessage] = []
+                    child_cursor = sys_start + random.uniform(0.005, 0.02)
+                    roll = random.random()
+                    if roll < 0.50:
+                        child_cursor = self._generate_child_spans(
+                            children,
+                            trace_id,
+                            root_span_id,
+                            entity.id,
+                            child_cursor,
+                            random.randint(1, 3),
+                            depth=0,
+                        )
+                    elif roll < 0.80:
+                        child_cursor = self._generate_child_spans(
+                            children,
+                            trace_id,
+                            root_span_id,
+                            entity.id,
+                            child_cursor,
+                            random.randint(3, 5),
+                            depth=0,
+                        )
+                    else:
+                        child_cursor = self._generate_deep_trace(
+                            children,
+                            trace_id,
+                            root_span_id,
+                            entity.id,
+                            child_cursor,
+                        )
+                    sys_duration = child_cursor - sys_start
+                    has_error = any(s.status == SpanStatus.error for s in children)
+                    all_spans.extend(children)
+                else:
+                    sys_duration = random.uniform(0.005, 0.04)
+                    has_error = False
+
+                root_span = SpanEventMessage(
+                    span_id=root_span_id,
+                    trace_id=trace_id,
+                    name=system_name,
+                    start_time=sys_start,
+                    end_time=sys_start + sys_duration,
+                    status=SpanStatus.error if has_error else SpanStatus.ok,
+                    attributes={
+                        "agentecs.tick": self._tick,
+                        "agentecs.entity_id": entity.id,
+                        "agentecs.system": system_name,
+                    },
+                )
+                all_spans.append(root_span)
+                group_end = max(group_end, sys_start + sys_duration)
+
+            cursor = group_end + random.uniform(0.005, 0.015)
+
         for span in all_spans:
             self._history.record_span(span)
             await self._emit_event(span)
