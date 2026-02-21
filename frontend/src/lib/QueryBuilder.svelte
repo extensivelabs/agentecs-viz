@@ -134,7 +134,7 @@
             class="w-full rounded border border-bg-tertiary bg-bg-primary px-2 py-1 text-xs text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
             placeholder="Component name..."
             onfocus={() => { showSuggestions = true }}
-            onblur={() => { setTimeout(() => { showSuggestions = false }, 150) }}
+            onblur={() => { showSuggestions = false }}
             onkeydown={handleKeydown}
             data-testid="component-input"
           />
@@ -143,7 +143,7 @@
               {#each suggestions as suggestion (suggestion)}
                 <button
                   class="block w-full px-2 py-1 text-left text-xs text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
-                  onmousedown={() => addClause(suggestion)}
+                  onmousedown={(e) => { e.preventDefault(); addClause(suggestion) }}
                   data-testid="suggestion"
                 >{suggestion}</button>
               {/each}
