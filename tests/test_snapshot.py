@@ -53,7 +53,6 @@ class TestWorldSnapshot:
     def test_create(self):
         ws = WorldSnapshot(
             tick=10,
-            entity_count=2,
             entities=[
                 EntitySnapshot(
                     id=0,
@@ -97,7 +96,6 @@ class TestWorldSnapshot:
         ws = WorldSnapshot(
             tick=3,
             timestamp=100.0,
-            entity_count=1,
             entities=[EntitySnapshot(id=0)],
             metadata={"key": "value"},
         )
@@ -113,11 +111,22 @@ class TestWorldSnapshot:
         assert ws.entity_count == 0
         assert ws.archetypes == []
 
+    def test_entity_count_computed(self):
+        """entity_count is derived from entities list, never diverges."""
+        ws = WorldSnapshot(entities=[EntitySnapshot(id=1), EntitySnapshot(id=2)])
+        assert ws.entity_count == 2
+        # Roundtrip preserves computed field
+        data = ws.model_dump()
+        assert data["entity_count"] == 2
+        ws2 = WorldSnapshot.model_validate(data)
+        assert ws2.entity_count == 2
+
 
 class TestComponentDiff:
     def test_added(self):
         diff = ComponentDiff(
             component_type="Health",
+            type_name="m.Health",
             old_value=None,
             new_value={"hp": 100},
         )
@@ -127,6 +136,7 @@ class TestComponentDiff:
     def test_removed(self):
         diff = ComponentDiff(
             component_type="Health",
+            type_name="m.Health",
             old_value={"hp": 50},
             new_value=None,
         )
@@ -136,6 +146,7 @@ class TestComponentDiff:
     def test_modified(self):
         diff = ComponentDiff(
             component_type="Position",
+            type_name="m.Position",
             old_value={"x": 0},
             new_value={"x": 5},
         )
@@ -151,7 +162,11 @@ class TestTickDelta:
             spawned=[EntitySnapshot(id=10)],
             destroyed=[3],
             modified={
-                1: [ComponentDiff(component_type="X", old_value={"a": 1}, new_value={"a": 2})]
+                1: [
+                    ComponentDiff(
+                        component_type="X", type_name="m.X", old_value={"a": 1}, new_value={"a": 2}
+                    )
+                ]
             },
         )
         assert delta.tick == 5

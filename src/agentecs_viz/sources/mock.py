@@ -243,7 +243,6 @@ class MockWorldSource(TickLoopSource):
         return WorldSnapshot(
             tick=self._tick,
             timestamp=time.time(),
-            entity_count=len(self._entities),
             entities=self._entities,
             metadata={"source": "mock", "paused": self._paused},
         )

@@ -10,6 +10,4 @@ def make_entity(eid: int, **comp_data: dict) -> EntitySnapshot:
 
 
 def make_snapshot(tick: int, entities: list[EntitySnapshot]) -> WorldSnapshot:
-    return WorldSnapshot(
-        tick=tick, timestamp=float(tick), entity_count=len(entities), entities=entities
-    )
+    return WorldSnapshot(tick=tick, timestamp=float(tick), entities=entities)
