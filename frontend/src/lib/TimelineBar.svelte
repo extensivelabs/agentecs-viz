@@ -81,10 +81,42 @@
       : 0,
   );
 
-  let tickDisplayWidth = $derived.by(() => {
-    const maxDigits = String(world.maxTick).length;
-    return maxDigits * 2 + 3; // worst-case width: maxDigits per number + 3 for " / "
-  });
+  let tickInputValue = $state("");
+  let editingTick = $state(false);
+  let tickInputEl: HTMLInputElement | undefined = $state();
+
+  let tickInputWidth = $derived(Math.max(2, String(world.maxTick).length));
+
+  function startTickEdit(): void {
+    if (!world.canScrub) return;
+    editingTick = true;
+    tickInputValue = String(world.tick);
+    // Focus after Svelte renders the input
+    requestAnimationFrame(() => tickInputEl?.select());
+  }
+
+  function commitTickEdit(): void {
+    editingTick = false;
+    const val = parseInt(tickInputValue, 10);
+    if (!isNaN(val)) {
+      const clamped = Math.min(world.maxTick, Math.max(world.minTick, val));
+      world.seek(clamped);
+    }
+  }
+
+  function cancelTickEdit(): void {
+    editingTick = false;
+  }
+
+  function handleTickInputKeydown(e: KeyboardEvent): void {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitTickEdit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelTickEdit();
+    }
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -194,7 +226,27 @@
     </div>
   </div>
 
-  <span class="whitespace-nowrap text-right text-xs text-text-secondary" style="font-variant-numeric: tabular-nums; min-width: {tickDisplayWidth}ch" data-testid="tick-display">
-    {world.tick} / {world.maxTick}
+  <span class="flex items-center whitespace-nowrap text-xs" style="font-variant-numeric: tabular-nums" data-testid="tick-display">
+    {#if editingTick}
+      <input
+        bind:this={tickInputEl}
+        bind:value={tickInputValue}
+        class="w-[{tickInputWidth + 1}ch] rounded border border-accent bg-bg-primary px-1 py-0.5 text-right text-xs text-text-primary outline-none"
+        style="width: {tickInputWidth + 1}ch"
+        onblur={commitTickEdit}
+        onkeydown={handleTickInputKeydown}
+        data-testid="tick-input"
+      />
+    {:else}
+      <button
+        class="rounded border border-transparent px-1 py-0.5 text-right text-text-secondary hover:border-bg-tertiary hover:text-text-primary"
+        class:cursor-text={world.canScrub}
+        onclick={startTickEdit}
+        disabled={!world.canScrub}
+        data-testid="tick-value"
+        title="Click to seek to tick"
+      >{world.tick}</button>
+    {/if}
+    <span class="text-text-muted">&nbsp;/ {world.maxTick}</span>
   </span>
 </div>
