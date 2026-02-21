@@ -81,37 +81,69 @@
       : 0,
   );
 
-  let tickDisplayWidth = $derived.by(() => {
-    const maxDigits = String(world.maxTick).length;
-    return maxDigits * 2 + 3; // worst-case width: maxDigits per number + 3 for " / "
-  });
+  let tickInputValue = $state("");
+  let editingTick = $state(false);
+  let tickInputEl: HTMLInputElement | undefined = $state();
+
+  let tickInputWidth = $derived(Math.max(2, String(world.maxTick).length));
+
+  function startTickEdit(): void {
+    if (!world.canScrub) return;
+    editingTick = true;
+    tickInputValue = String(world.tick);
+    // Focus after Svelte renders the input
+    requestAnimationFrame(() => tickInputEl?.select());
+  }
+
+  function commitTickEdit(): void {
+    editingTick = false;
+    const val = parseInt(tickInputValue, 10);
+    if (!isNaN(val)) {
+      const clamped = Math.min(world.maxTick, Math.max(world.minTick, val));
+      world.seek(clamped);
+    }
+  }
+
+  function cancelTickEdit(): void {
+    editingTick = false;
+  }
+
+  function handleTickInputKeydown(e: KeyboardEvent): void {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitTickEdit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelTickEdit();
+    }
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 <div
-  class="flex h-10 shrink-0 items-center gap-2 border-b border-bg-tertiary bg-bg-secondary px-3"
+  class="flex h-11 shrink-0 items-center gap-2 border-b border-bg-tertiary bg-bg-secondary px-3"
   role="toolbar"
   aria-label="Timeline controls"
 >
   <div class="flex items-center gap-0.5">
     <button
-      class="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-bg-tertiary hover:text-text-primary disabled:opacity-30 disabled:pointer-events-none"
+      class="flex h-8 w-8 items-center justify-center rounded text-text-secondary hover:bg-bg-tertiary hover:text-text-primary disabled:opacity-30 disabled:pointer-events-none"
       onclick={() => world.stepBack()}
       disabled={!world.canScrub || world.tick <= world.minTick || world.isReplayPlaying}
       aria-label="Step back"
     >
-      <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
         <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
       </svg>
     </button>
 
     <button
-      class="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
+      class="flex h-8 w-8 items-center justify-center rounded text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
       onclick={() => world.togglePause()}
       aria-label={world.isPaused && !world.isReplayPlaying ? "Play" : "Pause"}
     >
-      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+      <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
         {#if world.isPaused && !world.isReplayPlaying}
           <path d="M8 5v14l11-7z" />
         {:else}
@@ -121,12 +153,12 @@
     </button>
 
     <button
-      class="flex h-7 w-7 items-center justify-center rounded text-text-secondary hover:bg-bg-tertiary hover:text-text-primary disabled:opacity-30 disabled:pointer-events-none"
+      class="flex h-8 w-8 items-center justify-center rounded text-text-secondary hover:bg-bg-tertiary hover:text-text-primary disabled:opacity-30 disabled:pointer-events-none"
       onclick={() => world.step()}
       disabled={world.isReplayPlaying}
       aria-label="Step forward"
     >
-      <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
         <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
       </svg>
     </button>
@@ -135,7 +167,7 @@
   <span class="text-text-muted">|</span>
 
   <button
-    class="rounded px-1.5 py-0.5 text-xs font-medium text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
+    class="rounded px-2 py-1 text-sm font-medium text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
     onclick={() => timeline.nextSpeed()}
     aria-label="Playback speed"
     data-testid="speed-button"
@@ -143,7 +175,7 @@
     {timeline.playbackSpeed}x
   </button>
 
-  <span class="flex items-center gap-1.5 text-xs font-medium {modeColors[world.playbackMode] ?? 'text-text-muted'}" data-testid="mode-indicator">
+  <span class="flex items-center gap-1.5 text-sm font-medium {modeColors[world.playbackMode] ?? 'text-text-muted'}" data-testid="mode-indicator">
     {#if world.playbackMode === "live"}
       <span class="relative flex h-2 w-2">
         <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75"></span>
@@ -155,7 +187,7 @@
 
   {#if !world.isAtLive && world.supportsHistory}
     <button
-      class="rounded bg-accent/20 px-2 py-0.5 text-xs font-semibold text-accent hover:bg-accent/30"
+      class="rounded bg-accent/20 px-2.5 py-1 text-sm font-semibold text-accent hover:bg-accent/30"
       onclick={() => world.goToLive()}
       aria-label="Go to live"
     >
@@ -181,20 +213,40 @@
     onpointerup={handlePointerUp}
     onpointercancel={handlePointerUp}
   >
-    <div class="relative h-1 w-full rounded-full bg-bg-tertiary">
+    <div class="relative h-1.5 w-full rounded-full bg-bg-tertiary">
       <div
         class="absolute left-0 top-0 h-full rounded-full bg-accent"
         style="width: {thumbPercent}%"
       ></div>
       <div
-        class="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full bg-accent shadow-sm"
+        class="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full bg-accent shadow-sm"
         style="left: {thumbPercent}%"
         class:scale-125={scrubbing}
       ></div>
     </div>
   </div>
 
-  <span class="whitespace-nowrap text-right text-xs text-text-secondary" style="font-variant-numeric: tabular-nums; min-width: {tickDisplayWidth}ch" data-testid="tick-display">
-    {world.tick} / {world.maxTick}
+  <span class="flex items-center whitespace-nowrap text-sm" style="font-variant-numeric: tabular-nums" data-testid="tick-display">
+    {#if editingTick}
+      <input
+        bind:this={tickInputEl}
+        bind:value={tickInputValue}
+        class="w-[{tickInputWidth + 1}ch] rounded border border-accent bg-bg-primary px-1.5 py-0.5 text-right text-sm text-text-primary outline-none"
+        style="width: {tickInputWidth + 1}ch"
+        onblur={commitTickEdit}
+        onkeydown={handleTickInputKeydown}
+        data-testid="tick-input"
+      />
+    {:else}
+      <button
+        class="rounded border border-transparent px-1 py-0.5 text-right text-text-secondary hover:border-bg-tertiary hover:text-text-primary"
+        class:cursor-text={world.canScrub}
+        onclick={startTickEdit}
+        disabled={!world.canScrub}
+        data-testid="tick-value"
+        title="Click to seek to tick"
+      >{world.tick}</button>
+    {/if}
+    <span class="text-text-muted">&nbsp;/ {world.maxTick}</span>
   </span>
 </div>

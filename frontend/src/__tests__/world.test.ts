@@ -510,13 +510,15 @@ describe("WorldState", () => {
       expect(JSON.parse(ws.sentMessages[2])).toEqual({ command: "step" });
 
       state.seek(42);
-      expect(JSON.parse(ws.sentMessages[3])).toEqual({
+      // seek auto-pauses when not already paused (REQ-041)
+      expect(JSON.parse(ws.sentMessages[3])).toEqual({ command: "pause" });
+      expect(JSON.parse(ws.sentMessages[4])).toEqual({
         command: "seek",
         tick: 42,
       });
 
       state.setSpeed(5);
-      expect(JSON.parse(ws.sentMessages[4])).toEqual({
+      expect(JSON.parse(ws.sentMessages[5])).toEqual({
         command: "set_speed",
         ticks_per_second: 5,
       });
@@ -1276,6 +1278,126 @@ describe("WorldState", () => {
       expect(state.activeQuery).toBeNull();
       expect(state.savedQueries).toHaveLength(1);
       expect(state.savedQueries[0].name).toBe("kept");
+    });
+  });
+
+  describe("REQ-039: tickRange bootstrap", () => {
+    beforeEach(() => {
+      state.connect("ws://test/ws");
+      MockWebSocket.instances[0].simulateOpen();
+    });
+
+    it("bootstraps tickRange from snapshot when metadata has null tick_range", () => {
+      MockWebSocket.instances[0].simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: makeConfig(),
+        tick_range: null,
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+      expect(state.tickRange).toBeNull();
+
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 5,
+        snapshot: makeSnapshot({ tick: 5 }),
+      } satisfies SnapshotMessage);
+      expect(state.tickRange).toEqual([5, 5]);
+      expect(state.maxTick).toBe(5);
+    });
+
+    it("does not overwrite existing tickRange on snapshot", () => {
+      MockWebSocket.instances[0].simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: makeConfig(),
+        tick_range: [0, 10],
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 5,
+        snapshot: makeSnapshot({ tick: 5 }),
+      } satisfies SnapshotMessage);
+      expect(state.tickRange).toEqual([0, 10]);
+    });
+
+    it("bootstraps tickRange from tick_update when null", () => {
+      MockWebSocket.instances[0].simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: makeConfig(),
+        tick_range: null,
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 0,
+        snapshot: makeSnapshot({ tick: 0 }),
+      } satisfies SnapshotMessage);
+      // snapshot bootstraps to [0, 0], then tick_update ratchets up
+      MockWebSocket.instances[0].simulateMessage({
+        type: "tick_update",
+        tick: 3,
+        entity_count: 1,
+        is_paused: false,
+      } satisfies TickUpdateMessage);
+      expect(state.tickRange).toEqual([0, 3]);
+      expect(state.maxTick).toBe(3);
+    });
+
+    it("preserves existing tickRange from metadata", () => {
+      MockWebSocket.instances[0].simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: makeConfig(),
+        tick_range: [0, 100],
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+      expect(state.tickRange).toEqual([0, 100]);
+    });
+  });
+
+  describe("REQ-041: seek auto-pause", () => {
+    beforeEach(() => {
+      state.connect("ws://test/ws");
+      const ws = MockWebSocket.instances[0];
+      ws.simulateOpen();
+      ws.simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: makeConfig(),
+        tick_range: [0, 10],
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 5,
+        snapshot: makeSnapshot({ tick: 5 }),
+      } satisfies SnapshotMessage);
+    });
+
+    it("sends pause before seek when not already paused", () => {
+      const ws = MockWebSocket.instances[0];
+      const before = ws.sentMessages.length;
+      state.seek(3);
+      const sent = ws.sentMessages.slice(before).map((m) => JSON.parse(m));
+      expect(sent[0]).toEqual({ command: "pause" });
+      expect(sent[1]).toEqual({ command: "seek", tick: 3 });
+    });
+
+    it("does not send pause when already paused", () => {
+      state.isPaused = true;
+      const ws = MockWebSocket.instances[0];
+      const before = ws.sentMessages.length;
+      state.seek(3);
+      const sent = ws.sentMessages.slice(before).map((m) => JSON.parse(m));
+      expect(sent).toEqual([{ command: "seek", tick: 3 }]);
     });
   });
 });

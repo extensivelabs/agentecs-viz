@@ -333,6 +333,9 @@ export class WorldState {
   }
 
   seek(tick: number): void {
+    if (!this.isPaused && !this.isReplayPlaying) {
+      this.pause();
+    }
     this.client?.seek(tick);
   }
 
@@ -420,7 +423,7 @@ export class WorldState {
     switch (msg.type) {
       case "metadata":
         this.config = msg.config;
-        this.tickRange = msg.tick_range;
+        this.tickRange = msg.tick_range ?? this.tickRange;
         this.supportsHistory = msg.supports_history;
         this.isPaused = msg.is_paused;
         break;
@@ -429,6 +432,9 @@ export class WorldState {
         this.updateEntityTracking(msg.snapshot);
         this.previousSnapshot = this.snapshot;
         this.snapshot = msg.snapshot;
+        if (!this.tickRange) {
+          this.tickRange = [msg.snapshot.tick, msg.snapshot.tick];
+        }
         break;
 
       case "tick_update":
@@ -445,6 +451,8 @@ export class WorldState {
             this.tickRange[0],
             Math.max(this.tickRange[1], msg.tick),
           ];
+        } else {
+          this.tickRange = [0, msg.tick];
         }
         break;
 

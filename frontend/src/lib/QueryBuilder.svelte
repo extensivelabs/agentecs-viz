@@ -60,20 +60,20 @@
 </script>
 
 <div class="border-b border-bg-tertiary" data-testid="query-builder">
-  <div class="flex items-center gap-2 px-4 py-1.5">
+  <div class="flex items-center gap-2 px-4 py-2">
     <button
-      class="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary"
+      class="flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
       onclick={() => { expanded = !expanded }}
       data-testid="query-toggle"
     >
-      <svg class="h-3 w-3 transition-transform" class:rotate-90={expanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg class="h-3.5 w-3.5 transition-transform" class:rotate-90={expanded} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M9 18l6-6-6-6" />
       </svg>
       Filter
     </button>
 
     {#if world.hasActiveFilter}
-      <span class="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-medium text-accent" data-testid="match-count">
+      <span class="rounded bg-accent/20 px-2 py-0.5 text-xs font-medium text-accent" data-testid="match-count">
         {world.matchCount}/{world.entityCount}
       </span>
 
@@ -81,7 +81,7 @@
       <div class="flex items-center gap-1 overflow-x-auto">
         {#each world.activeQuery?.clauses ?? [] as clause, i (clause.component)}
           <span
-            class="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] {clause.type === 'with' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}"
+            class="flex items-center gap-1 rounded px-2 py-0.5 text-xs {clause.type === 'with' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}"
             data-testid="clause-chip"
           >
             {clause.type === "with" ? "WITH" : "NOT"} {clause.component}
@@ -97,7 +97,7 @@
       </div>
 
       <button
-        class="ml-auto shrink-0 text-[10px] text-text-muted hover:text-text-secondary"
+        class="ml-auto shrink-0 text-xs text-text-muted hover:text-text-secondary"
         onclick={() => world.clearQuery()}
         data-testid="clear-query"
       >clear</button>
@@ -108,7 +108,7 @@
     <div class="border-t border-bg-tertiary px-4 py-2" data-testid="query-builder-expanded">
       <!-- Clause builder -->
       <div class="flex items-center gap-2">
-        <div class="flex items-center gap-1 rounded bg-bg-secondary px-1 py-0.5 text-xs">
+        <div class="flex items-center gap-1 rounded bg-bg-secondary px-1.5 py-0.5 text-sm">
           <button
             class="rounded px-1.5 py-0.5"
             class:bg-emerald-500={clauseType === "with"}
@@ -131,7 +131,7 @@
           <input
             bind:this={inputEl}
             bind:value={inputValue}
-            class="w-full rounded border border-bg-tertiary bg-bg-primary px-2 py-1 text-xs text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
+            class="w-full rounded border border-bg-tertiary bg-bg-primary px-2.5 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
             placeholder="Component name..."
             onfocus={() => { showSuggestions = true }}
             onblur={() => { showSuggestions = false }}
@@ -142,7 +142,7 @@
             <div class="absolute left-0 top-full z-10 mt-1 max-h-40 w-full overflow-y-auto rounded border border-bg-tertiary bg-bg-secondary shadow-lg" data-testid="suggestions">
               {#each suggestions as suggestion (suggestion)}
                 <button
-                  class="block w-full px-2 py-1 text-left text-xs text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
+                  class="block w-full px-2.5 py-1.5 text-left text-sm text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
                   onmousedown={(e) => { e.preventDefault(); addClause(suggestion) }}
                   data-testid="suggestion"
                 >{suggestion}</button>
@@ -160,13 +160,13 @@
               <div class="flex items-center gap-1">
                 <button
                   type="button"
-                  class="rounded border border-bg-tertiary px-1.5 py-0.5 text-[10px] text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
+                  class="rounded border border-bg-tertiary px-2 py-0.5 text-xs text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
                   onclick={() => world.loadQuery(saved.name)}
                   data-testid="saved-query"
                 >{saved.name}</button>
                 <button
                   type="button"
-                  class="text-[10px] leading-none text-text-muted hover:text-error"
+                  class="text-xs leading-none text-text-muted hover:text-error"
                   aria-label={"Delete saved query " + saved.name}
                   onclick={() => world.deleteSavedQuery(saved.name)}
                   data-testid="delete-saved-query"
@@ -181,20 +181,20 @@
             <div class="flex items-center gap-1">
               <input
                 bind:value={saveName}
-                class="w-24 rounded border border-bg-tertiary bg-bg-primary px-1.5 py-0.5 text-[10px] text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
+                class="w-28 rounded border border-bg-tertiary bg-bg-primary px-2 py-0.5 text-xs text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
                 placeholder="Query name"
                 onkeydown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") { showSaveInput = false } }}
                 data-testid="save-name-input"
               />
               <button
-                class="text-[10px] text-accent hover:text-accent/80"
+                class="text-xs text-accent hover:text-accent/80"
                 onclick={handleSave}
                 data-testid="save-confirm"
               >save</button>
             </div>
           {:else}
             <button
-              class="text-[10px] text-text-muted hover:text-text-secondary"
+              class="text-xs text-text-muted hover:text-text-secondary"
               onclick={() => { showSaveInput = true }}
               data-testid="save-query-btn"
             >save query</button>

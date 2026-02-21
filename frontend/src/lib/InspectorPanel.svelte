@@ -88,8 +88,8 @@
         style:background-color={archetypeColor}
       ></span>
       <div class="min-w-0 flex-1">
-        <div class="text-sm font-medium text-text-primary">Entity #{entity.id}</div>
-        <div class="truncate text-xs text-text-muted">{archetypeLabel}</div>
+        <div class="text-base font-medium text-text-primary">Entity #{entity.id}</div>
+        <div class="truncate text-sm text-text-muted">{archetypeLabel}</div>
       </div>
       <button
         class="shrink-0 rounded p-1 text-text-muted hover:bg-bg-tertiary hover:text-text-primary"
@@ -106,15 +106,15 @@
     <div class="flex-1 overflow-y-auto">
       {#if entityErrors.length > 0}
         <div class="border-b border-bg-tertiary px-4 py-2" data-testid="inspector-errors">
-          <div class="mb-1 text-xs font-medium text-error">
+          <div class="mb-1 text-sm font-medium text-error">
             {entityErrors.length} {entityErrors.length === 1 ? "error" : "errors"}
           </div>
           {#each entityErrors as error, i (error.tick + ':' + error.message + ':' + i)}
             <div
-              class="flex items-center gap-1.5 py-0.5 text-xs"
+              class="flex items-center gap-1.5 py-0.5 text-sm"
               class:opacity-50={error.tick < world.tick}
             >
-              <span class="shrink-0 rounded px-1 py-0.5 text-[10px] font-medium {severityClasses(error.severity)}">
+              <span class="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium {severityClasses(error.severity)}">
                 {severityLabel(error.severity)}
               </span>
               <span class="font-mono text-text-muted">T{error.tick}</span>
@@ -126,10 +126,10 @@
 
       {#if activeDiff && activeDiff.totalChanges > 0}
         <div class="border-b border-bg-tertiary px-4 py-2" data-testid="diff-summary">
-          <span class="rounded bg-warning/20 px-1.5 py-0.5 text-xs text-warning">
+          <span class="rounded bg-warning/20 px-2 py-0.5 text-sm text-warning">
             {activeDiff.totalChanges} {activeDiff.totalChanges === 1 ? "change" : "changes"}
           </span>
-          <span class="ml-1 text-xs text-text-muted">
+          <span class="ml-1 text-sm text-text-muted">
             {#if world.pinnedTick !== null}
               vs pinned tick {world.pinnedTick}
             {:else}
@@ -140,7 +140,7 @@
       {/if}
 
       {#if world.supportsHistory}
-        <div class="border-b border-bg-tertiary px-4 py-2 text-xs" data-testid="pin-compare">
+        <div class="border-b border-bg-tertiary px-4 py-2 text-sm" data-testid="pin-compare">
           {#if world.pinnedTick !== null}
             <span class="text-text-muted">Comparing to tick {world.pinnedTick}</span>
             <button
@@ -158,7 +158,7 @@
         </div>
       {/if}
 
-      <div class="border-b border-bg-tertiary px-4 py-2 text-xs text-text-muted">
+      <div class="border-b border-bg-tertiary px-4 py-2 text-sm text-text-muted">
         {sortedComponents.length} {sortedComponents.length === 1 ? "component" : "components"}
       </div>
 
@@ -166,7 +166,7 @@
         {@const compChanges = componentChanges(comp.type_short)}
         <div class="border-b border-bg-tertiary" data-testid="component-section">
           <button
-            class="flex w-full items-center gap-2 px-4 py-2 text-left text-xs hover:bg-bg-tertiary/50"
+            class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm hover:bg-bg-tertiary/50"
             onclick={() => toggleSection(comp.type_short)}
             data-testid="component-toggle"
           >
@@ -192,7 +192,7 @@
 
       {#each removedComponents as removed (entity.id + ':removed:' + removed.componentType)}
         <div class="border-b border-bg-tertiary bg-error/10" data-testid="component-section">
-          <div class="flex w-full items-center gap-2 px-4 py-2 text-left text-xs">
+          <div class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm">
             <span class="inline-block w-3"></span>
             <span class="font-medium text-error/70">{removed.componentType}</span>
             <span class="ml-auto rounded bg-error/20 px-1 text-error" data-testid="component-diff-badge">DEL</span>
@@ -201,12 +201,12 @@
       {/each}
 
       <div class="px-4 py-3" data-testid="traces-section">
-        <div class="flex items-center gap-2 text-xs">
-          <span class="text-xs text-text-muted">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="text-sm text-text-muted">
             {entitySpanCount} {entitySpanCount === 1 ? "span" : "spans"}
           </span>
         </div>
-        <div class="mt-1 text-xs text-text-muted" data-testid="entity-token-summary">
+        <div class="mt-1 text-sm text-text-muted" data-testid="entity-token-summary">
           <span class="text-text-secondary">{formatTokens(entityTokenUsage.total)}</span>
           <span> tokens</span>
           <span class="mx-1 text-text-muted/60">|</span>
@@ -216,7 +216,7 @@
         {#if entityModelTokenUsage.length > 0}
           <div class="mt-2 space-y-1" data-testid="entity-model-breakdown">
             {#each entityModelTokenUsage as modelUsage (modelUsage.model)}
-              <div class="flex items-center justify-between text-xs">
+              <div class="flex items-center justify-between text-sm">
                 <span class="truncate text-text-secondary">{modelUsage.model}</span>
                 <span class="font-mono text-text-muted">
                   {formatTokens(modelUsage.total)} / {formatCostUsd(modelUsage.costUsd)}
@@ -228,7 +228,7 @@
       </div>
     </div>
   {:else}
-    <div class="flex flex-1 items-center justify-center text-xs text-text-muted" data-testid="inspector-empty">
+    <div class="flex flex-1 items-center justify-center text-sm text-text-muted" data-testid="inspector-empty">
       Select an entity to inspect
     </div>
   {/if}

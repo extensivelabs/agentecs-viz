@@ -44,7 +44,7 @@
       role="tab"
       aria-selected={activeTab === tab.id}
       disabled={tab.disabled}
-      class="relative px-4 py-2 text-xs font-medium transition-colors"
+      class="relative px-4 py-2.5 text-sm font-medium transition-colors"
       class:text-text-primary={activeTab === tab.id}
       class:text-text-muted={activeTab !== tab.id && !tab.disabled}
       class:opacity-40={tab.disabled}
