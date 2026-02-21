@@ -88,7 +88,7 @@ class TestWebSocket:
             ws.send_json({"command": "pause"})
             ws.receive_json()  # tick_update ack for pause
 
-            max_drain = 20  # bound to prevent hangs if protocol changes
+            max_drain = 50  # each step: tick_update + snapshot + ~20-30 span/error events
             for _ in range(5):
                 ws.send_json({"command": "step"})
                 seen_tick_update = False
