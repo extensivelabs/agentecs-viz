@@ -17,18 +17,14 @@ from agentecs_viz.snapshot import TickDelta, WorldSnapshot
 # ---------------------------------------------------------------------------
 
 
-class SubscribeCommand(BaseModel):
-    command: Literal["subscribe"] = "subscribe"
-
-
 class SeekCommand(BaseModel):
     command: Literal["seek"] = "seek"
-    tick: int
+    tick: int = Field(ge=0)
 
 
 class SetSpeedCommand(BaseModel):
     command: Literal["set_speed"] = "set_speed"
-    ticks_per_second: float
+    ticks_per_second: float = Field(gt=0)
 
 
 class PauseCommand(BaseModel):
@@ -44,7 +40,7 @@ class StepCommand(BaseModel):
 
 
 ClientMessage = Annotated[
-    SubscribeCommand | SeekCommand | SetSpeedCommand | PauseCommand | ResumeCommand | StepCommand,
+    SeekCommand | SetSpeedCommand | PauseCommand | ResumeCommand | StepCommand,
     Field(discriminator="command"),
 ]
 
@@ -131,12 +127,6 @@ AnyServerEvent = (
     | TickUpdateMessage
     | MetadataMessage
 )
-
-ServerMessage = Annotated[
-    AnyServerEvent,
-    Field(discriminator="type"),
-]
-
 
 # ---------------------------------------------------------------------------
 # WorldStateSource protocol
