@@ -2,7 +2,12 @@ import asyncio
 
 import pytest
 
-from agentecs_viz.protocol import ErrorEventMessage, SnapshotMessage, SpanEventMessage
+from agentecs_viz.protocol import (
+    AnyServerEvent,
+    ErrorEventMessage,
+    SnapshotMessage,
+    SpanEventMessage,
+)
 from agentecs_viz.sources.mock import MockWorldSource
 
 
@@ -309,10 +314,11 @@ class TestMockWorldSource:
         finally:
             await source.disconnect()
 
-    async def test_subscriber_cleanup_on_disconnect(self, source: MockWorldSource):
+    async def test_subscriber_cleanup_on_generator_close(self, source: MockWorldSource):
         """Subscriber queue is removed after the async generator closes."""
         await source.connect()
         try:
+            await source.send_command("pause")
             assert len(source._subscribers) == 0
 
             collected: list[SnapshotMessage] = []
@@ -324,12 +330,12 @@ class TestMockWorldSource:
                         break
 
             task = asyncio.create_task(consume_one())
-            # Let the subscriber register
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0)
             assert len(source._subscribers) == 1
 
+            # Produce an event for the subscriber to consume and break
+            await source.send_command("step")
             await asyncio.wait_for(task, timeout=5.0)
-            # Allow generator cleanup to complete
             await asyncio.sleep(0)
             assert len(collected) == 1
             assert len(source._subscribers) == 0
@@ -338,23 +344,24 @@ class TestMockWorldSource:
 
     async def test_subscriber_queue_full_drops_event(self, caplog: pytest.LogCaptureFixture):
         """When a subscriber queue is full, events are dropped with a warning."""
+        import logging
+
+        caplog.set_level(logging.WARNING, logger="agentecs_viz.sources._base")
         source = MockWorldSource(entity_count=5, tick_interval=0.1)
         source._event_queue_maxsize = 1
         await source.connect()
         try:
             await source.send_command("pause")
 
-            # Register a subscriber queue without consuming from it
-            queue: asyncio.Queue[SnapshotMessage] = asyncio.Queue(maxsize=1)
-            source._subscribers.add(queue)  # type: ignore[arg-type]
+            queue: asyncio.Queue[AnyServerEvent] = asyncio.Queue(maxsize=1)
+            source._subscribers.add(queue)
 
-            # Emit enough events to overflow the tiny queue
             snapshot = await source.get_snapshot()
             msg = SnapshotMessage(tick=snapshot.tick, snapshot=snapshot)
             await source._emit_event(msg)  # fills queue (size 1)
             await source._emit_event(msg)  # overflow -> warning
 
             assert "Subscriber queue full" in caplog.text
-            source._subscribers.discard(queue)  # type: ignore[arg-type]
+            source._subscribers.discard(queue)
         finally:
             await source.disconnect()

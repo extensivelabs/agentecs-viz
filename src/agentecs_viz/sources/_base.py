@@ -78,6 +78,7 @@ class TickLoopSource:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._loop_task
             self._loop_task = None
+        self._subscribers.clear()
 
     async def subscribe(self) -> AsyncIterator[AnyServerEvent]:
         if not self._stop_event:
