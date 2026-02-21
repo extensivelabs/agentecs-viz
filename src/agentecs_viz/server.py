@@ -5,19 +5,27 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager, suppress
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from agentecs_viz._version import __version__
 from agentecs_viz.protocol import (
+    ClientMessage,
     ErrorMessage,
     MetadataMessage,
+    PauseCommand,
+    ResumeCommand,
+    SeekCommand,
+    SetSpeedCommand,
     SnapshotMessage,
+    StepCommand,
     TickUpdateMessage,
     WorldStateSource,
 )
+
+_client_message_adapter: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -87,14 +95,14 @@ def create_app(
             supports_history=source.supports_history,
             is_paused=source.is_paused,
         )
-        await websocket.send_json(meta_msg.model_dump())
+        await websocket.send_text(meta_msg.model_dump_json())
 
         snapshot = await source.get_snapshot()
         snapshot_msg = SnapshotMessage(
             tick=snapshot.tick,
             snapshot=snapshot,
         )
-        await websocket.send_json(snapshot_msg.model_dump())
+        await websocket.send_text(snapshot_msg.model_dump_json())
 
         async def receive_commands() -> None:
             try:
@@ -104,18 +112,19 @@ def create_app(
                         await _handle_command(source, websocket, data)
                     except Exception as e:
                         logger.exception("WebSocket command failed")
-                        await websocket.send_json(
-                            {"type": "error", "tick": source.get_current_tick(), "message": str(e)}
-                        )
+                        err = ErrorMessage(tick=source.get_current_tick(), message=str(e))
+                        await websocket.send_text(err.model_dump_json())
             except WebSocketDisconnect:
                 pass
 
         async def send_events() -> None:
             try:
                 async for event in source.subscribe():
-                    await websocket.send_json(event.model_dump())
+                    await websocket.send_text(event.model_dump_json())
             except WebSocketDisconnect:
                 pass
+            except Exception:
+                logger.warning("Event stream failed", exc_info=True)
 
         receive_task = asyncio.create_task(receive_commands())
         send_task = asyncio.create_task(send_events())
@@ -140,33 +149,33 @@ def create_app(
 async def _handle_command(
     source: WorldStateSource,
     websocket: WebSocket,
-    data: dict[str, Any],
+    data: object,
 ) -> None:
-    command = data.get("command", "")
-
-    if command == "seek":
-        try:
-            tick = int(data.get("tick", 0))
-        except (ValueError, TypeError):
-            err = ErrorMessage(tick=source.get_current_tick(), message="Invalid tick value")
-            await websocket.send_json(err.model_dump())
-            return
-        snapshot = await source.get_snapshot(tick)
-        msg = SnapshotMessage(tick=snapshot.tick, snapshot=snapshot)
-        await websocket.send_json(msg.model_dump())
-    elif command in ("pause", "resume", "step"):
-        await source.send_command(command)
-        snapshot = await source.get_snapshot()
-        ack = TickUpdateMessage(
-            tick=snapshot.tick,
-            entity_count=snapshot.entity_count,
-            is_paused=source.is_paused,
+    try:
+        cmd = _client_message_adapter.validate_python(data)
+    except ValidationError as exc:
+        err = ErrorMessage(
+            tick=source.get_current_tick(),
+            message=f"Invalid command: {exc.errors()[0]['msg']}",
         )
-        await websocket.send_json(ack.model_dump())
-    elif command == "set_speed":
-        tps = data.get("ticks_per_second", 1.0)
-        await source.send_command(command, ticks_per_second=tps)
-    elif command == "subscribe":
-        pass  # Already subscribed via send_events
-    else:
-        await source.send_command(command, **{k: v for k, v in data.items() if k != "command"})
+        await websocket.send_text(err.model_dump_json())
+        return
+
+    match cmd:
+        case SeekCommand(tick=tick):
+            snapshot = await source.get_snapshot(tick)
+            msg = SnapshotMessage(tick=snapshot.tick, snapshot=snapshot)
+            await websocket.send_text(msg.model_dump_json())
+        case PauseCommand() | ResumeCommand() | StepCommand():
+            await source.send_command(cmd.command)
+            snapshot = await source.get_snapshot()
+            ack = TickUpdateMessage(
+                tick=snapshot.tick,
+                entity_count=snapshot.entity_count,
+                is_paused=source.is_paused,
+            )
+            await websocket.send_text(ack.model_dump_json())
+        case SetSpeedCommand(ticks_per_second=tps):
+            await source.send_command("set_speed", ticks_per_second=tps)
+        case _:
+            raise AssertionError(f"Unhandled command type: {type(cmd).__name__}")

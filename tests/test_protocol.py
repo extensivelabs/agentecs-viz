@@ -1,3 +1,6 @@
+from collections.abc import AsyncIterator
+from typing import Any
+
 from agentecs_viz.protocol import (
     AnyServerEvent,
     DeltaMessage,
@@ -13,7 +16,6 @@ from agentecs_viz.protocol import (
     SpanEventMessage,
     SpanStatus,
     StepCommand,
-    SubscribeCommand,
     TickUpdateMessage,
     WorldStateSource,
 )
@@ -21,10 +23,6 @@ from agentecs_viz.snapshot import TickDelta, WorldSnapshot
 
 
 class TestClientMessages:
-    def test_subscribe(self):
-        msg = SubscribeCommand()
-        assert msg.command == "subscribe"
-
     def test_seek(self):
         msg = SeekCommand(tick=42)
         assert msg.command == "seek"
@@ -123,29 +121,46 @@ class TestErrorEventMessage:
         assert ErrorSeverity.info == "info"
 
 
+class _StubSource(WorldStateSource):
+    """Minimal concrete subclass to test Protocol default property values."""
+
+    async def connect(self) -> None: ...
+    async def disconnect(self) -> None: ...
+    async def get_snapshot(self, tick: int | None = None) -> WorldSnapshot:
+        return WorldSnapshot(tick=0)
+
+    def get_current_tick(self) -> int:
+        return 0
+
+    def subscribe(self) -> AsyncIterator[AnyServerEvent]:
+        async def _empty() -> AsyncIterator[AnyServerEvent]:
+            return
+            yield  # noqa: RET504
+
+        return _empty()
+
+    async def send_command(self, command: str, **kwargs: Any) -> None: ...
+    @property
+    def is_connected(self) -> bool:
+        return True
+
+
 class TestWorldStateSourceProtocol:
     def test_isinstance_check(self):
         """WorldStateSource is a runtime-checkable Protocol."""
-        assert hasattr(WorldStateSource, "__protocol_attrs__") or callable(
-            getattr(WorldStateSource, "_is_protocol", None)
-        )
+        assert isinstance(_StubSource(), WorldStateSource)
 
     def test_default_is_paused(self):
-        assert WorldStateSource.is_paused.fget is not None
-        # Verify default returns False (via property descriptor)
-        assert WorldStateSource.is_paused.fget(None) is False  # type: ignore[arg-type]
+        assert _StubSource().is_paused is False
 
     def test_default_supports_history(self):
-        assert WorldStateSource.supports_history.fget is not None
-        assert WorldStateSource.supports_history.fget(None) is False  # type: ignore[arg-type]
+        assert _StubSource().supports_history is False
 
     def test_default_tick_range(self):
-        assert WorldStateSource.tick_range.fget is not None
-        assert WorldStateSource.tick_range.fget(None) is None  # type: ignore[arg-type]
+        assert _StubSource().tick_range is None
 
     def test_default_visualization_config(self):
-        assert WorldStateSource.visualization_config.fget is not None
-        assert WorldStateSource.visualization_config.fget(None) is None  # type: ignore[arg-type]
+        assert _StubSource().visualization_config is None
 
 
 class TestSpanEventMessage:
