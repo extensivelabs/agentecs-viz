@@ -47,6 +47,7 @@ tasks:
       - '{{.RUN}} ruff check {{.SRC_DIR}} {{.TEST_DIR}}'
       - '{{.RUN}} mypy {{.SRC_DIR}}'
       - '{{.RUN}} pytest'
+      - task: frontend:check
 
   serve:
     desc: Start server with mock data
@@ -79,6 +80,19 @@ tasks:
       - dist/**/*
     cmds:
       - npm run build
+
+  frontend:test:
+    desc: Run frontend tests
+    dir: frontend
+    cmds:
+      - npx vitest run {{.CLI_ARGS}}
+
+  frontend:check:
+    desc: Run frontend type checking and tests
+    dir: frontend
+    cmds:
+      - npm run check
+      - npx vitest run
 
   clean:
     desc: Remove all build artifacts (add --all for venv too)
