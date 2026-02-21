@@ -430,7 +430,12 @@ export class WorldState {
         this.updateEntityTracking(msg.snapshot);
         this.previousSnapshot = this.snapshot;
         this.snapshot = msg.snapshot;
-        if (!this.tickRange) {
+        if (this.tickRange) {
+          this.tickRange = [
+            this.tickRange[0],
+            Math.max(this.tickRange[1], msg.snapshot.tick),
+          ];
+        } else {
           this.tickRange = [msg.snapshot.tick, msg.snapshot.tick];
         }
         break;

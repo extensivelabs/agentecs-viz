@@ -1307,7 +1307,7 @@ describe("WorldState", () => {
       expect(state.maxTick).toBe(5);
     });
 
-    it("does not overwrite existing tickRange on snapshot", () => {
+    it("keeps tickRange when snapshot tick is within range", () => {
       MockWebSocket.instances[0].simulateMessage({
         type: "metadata",
         tick: 0,
@@ -1322,6 +1322,27 @@ describe("WorldState", () => {
         snapshot: makeSnapshot({ tick: 5 }),
       } satisfies SnapshotMessage);
       expect(state.tickRange).toEqual([0, 10]);
+    });
+
+    it("ratchets maxTick upward when snapshot tick exceeds tickRange", () => {
+      MockWebSocket.instances[0].simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: makeConfig(),
+        tick_range: [0, 9],
+        supports_history: true,
+        is_paused: false,
+      } satisfies MetadataMessage);
+      expect(state.tickRange).toEqual([0, 9]);
+
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 17,
+        snapshot: makeSnapshot({ tick: 17 }),
+      } satisfies SnapshotMessage);
+      expect(state.tickRange).toEqual([0, 17]);
+      expect(state.maxTick).toBe(17);
+      expect(state.tick).toBe(17);
     });
 
     it("bootstraps tickRange from tick_update when null", () => {
