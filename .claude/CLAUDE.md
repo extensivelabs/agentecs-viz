@@ -20,7 +20,9 @@ After quality-check passes and user confirms ready:
    d. Resolve ALL threads and verify 0 unresolved — use "Resolve and verify" script below
    e. Ask user to re-request Copilot review
    f. Repeat b-e until no new comments remain
-3. **Merge** — `gh pr merge --squash --delete-branch`
+3. **Merge** — only after Copilot re-review completes:
+   - If the latest review had **zero comments**: merge immediately (`gh pr merge --squash --delete-branch`)
+   - If comments were addressed and a new push was made: **always wait for Copilot re-review** (or confirm with user) before merging. The re-review often surfaces new comments on the fix.
 4. **Finalize** — invoke `/requirement-complete`
 
 ## Addressing Existing PR Review Comments
