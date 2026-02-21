@@ -1383,6 +1383,85 @@ describe("WorldState", () => {
     });
   });
 
+  describe("REQ-040: play in history replays, play at live resumes", () => {
+    let ws: InstanceType<typeof MockWebSocket>;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      state.connect("ws://test/ws");
+      ws = MockWebSocket.instances[0];
+      ws.simulateOpen();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("togglePause at live sends resume, not replay", () => {
+      ws.simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: makeConfig(),
+        tick_range: [0, 10],
+        supports_history: true,
+        is_paused: true,
+      } satisfies MetadataMessage);
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 10,
+        snapshot: makeSnapshot({ tick: 10 }),
+      } satisfies SnapshotMessage);
+
+      expect(state.isAtLive).toBe(true);
+      const before = ws.sentMessages.length;
+      state.togglePause();
+
+      expect(state.isReplayPlaying).toBe(false);
+      const sent = ws.sentMessages.slice(before).map((m) => JSON.parse(m));
+      expect(sent).toEqual([{ command: "resume" }]);
+    });
+
+    it("step back then togglePause starts replay after stale metadata", () => {
+      // Simulate the REQ-039 race: metadata has stale tick_range, snapshot is ahead
+      ws.simulateMessage({
+        type: "metadata",
+        tick: 0,
+        config: makeConfig(),
+        tick_range: [0, 5],
+        supports_history: true,
+        is_paused: true,
+      } satisfies MetadataMessage);
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 10,
+        snapshot: makeSnapshot({ tick: 10 }),
+      } satisfies SnapshotMessage);
+
+      // REQ-039 fix: tickRange[1] ratcheted to 10
+      expect(state.maxTick).toBe(10);
+      expect(state.isAtLive).toBe(true);
+
+      // Step back into history
+      state.stepBack();
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 9,
+        snapshot: makeSnapshot({ tick: 9 }),
+      } satisfies SnapshotMessage);
+      expect(state.isAtLive).toBe(false);
+
+      // Play should start replay, not send resume
+      const before = ws.sentMessages.length;
+      state.togglePause();
+      expect(state.isReplayPlaying).toBe(true);
+      expect(state.playbackMode).toBe("replay");
+
+      const sent = ws.sentMessages.slice(before).map((m) => JSON.parse(m));
+      const resumeMsg = sent.find((m) => m.command === "resume");
+      expect(resumeMsg).toBeUndefined();
+    });
+  });
+
   describe("REQ-041: seek auto-pause", () => {
     beforeEach(() => {
       state.connect("ws://test/ws");
