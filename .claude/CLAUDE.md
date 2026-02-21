@@ -30,7 +30,7 @@ When tackling review comments on existing PRs, follow this checklist for **each 
 1. **Fetch comments** — `gh api repos/{owner}/{repo}/pulls/{pr}/comments?per_page=100`
 2. **Triage** — categorize each comment as actionable code fix, documentation update, or decline
 3. **Implement fixes** — code changes, test additions, PR description updates
-4. **Run tests** — `task test` (Python) + `cd frontend && npx vitest run` (frontend)
+4. **Run tests** — `task test` (Python) + `task frontend:test` (frontend)
 5. **Commit and push** — atomic commit with review fix summary
 6. **Reply to each comment** — explain fix or reason for declining
 7. **Resolve threads and verify** — run the resolve-and-verify script below. **A PR is NOT done until this reports 0 unresolved.**
