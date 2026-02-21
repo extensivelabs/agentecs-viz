@@ -56,7 +56,7 @@ class TestClientMessages:
 
 class TestServerMessages:
     def test_snapshot_message(self):
-        ws = WorldSnapshot(tick=5, entity_count=3)
+        ws = WorldSnapshot(tick=5)
         msg = SnapshotMessage(tick=5, snapshot=ws)
         assert msg.type == "snapshot"
         assert msg.snapshot.tick == 5

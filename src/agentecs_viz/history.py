@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 import logging
 from collections import deque
 from collections.abc import Sequence
@@ -28,11 +29,15 @@ def _diff_entity(old: EntitySnapshot, new: EntitySnapshot) -> list[ComponentDiff
     for comp_type in sorted(set(old_comps) | set(new_comps)):
         old_comp = old_comps.get(comp_type)
         new_comp = new_comps.get(comp_type)
+        source_comp = new_comp or old_comp
+        assert source_comp is not None  # comp_type comes from their union
+        resolved_type_name = source_comp.type_name
 
         if old_comp is None:
             diffs.append(
                 ComponentDiff(
                     component_type=comp_type,
+                    type_name=resolved_type_name,
                     old_value=None,
                     new_value=new_comp.data if new_comp else None,
                 )
@@ -41,6 +46,7 @@ def _diff_entity(old: EntitySnapshot, new: EntitySnapshot) -> list[ComponentDiff
             diffs.append(
                 ComponentDiff(
                     component_type=comp_type,
+                    type_name=resolved_type_name,
                     old_value=old_comp.data,
                     new_value=None,
                 )
@@ -49,6 +55,7 @@ def _diff_entity(old: EntitySnapshot, new: EntitySnapshot) -> list[ComponentDiff
             diffs.append(
                 ComponentDiff(
                     component_type=comp_type,
+                    type_name=resolved_type_name,
                     old_value=old_comp.data,
                     new_value=new_comp.data,
                 )
@@ -96,7 +103,7 @@ def _apply_delta(snapshot: WorldSnapshot, delta: TickDelta) -> WorldSnapshot:
         for diff in diffs:
             if diff.old_value is None and diff.new_value is not None:
                 comps_by_type[diff.component_type] = ComponentSnapshot(
-                    type_name=f"unknown.{diff.component_type}",
+                    type_name=diff.type_name,
                     type_short=diff.component_type,
                     data=diff.new_value,
                 )
@@ -108,7 +115,7 @@ def _apply_delta(snapshot: WorldSnapshot, delta: TickDelta) -> WorldSnapshot:
                     comp.data = diff.new_value
                 else:
                     comps_by_type[diff.component_type] = ComponentSnapshot(
-                        type_name=f"unknown.{diff.component_type}",
+                        type_name=diff.type_name,
                         type_short=diff.component_type,
                         data=diff.new_value,
                     )
@@ -122,7 +129,6 @@ def _apply_delta(snapshot: WorldSnapshot, delta: TickDelta) -> WorldSnapshot:
     return WorldSnapshot(
         tick=delta.tick,
         timestamp=delta.timestamp,
-        entity_count=len(entities),
         entities=entities,
         metadata=snapshot.metadata,
     )
@@ -143,6 +149,7 @@ class InMemoryHistoryStore:
         self._max_ticks = max_ticks
         self._checkpoint_interval = checkpoint_interval
         self._checkpoints: dict[int, WorldSnapshot] = {}
+        self._checkpoint_ticks: list[int] = []  # sorted for bisect
         self._deltas: dict[int, TickDelta] = {}
         self._errors: dict[int, list[ErrorEventMessage]] = {}
         self._spans: dict[int, list[SpanEventMessage]] = {}
@@ -176,6 +183,7 @@ class InMemoryHistoryStore:
 
         if is_checkpoint:
             self._checkpoints[tick] = snapshot.model_copy(deep=True)
+            bisect.insort(self._checkpoint_ticks, tick)
         elif self._last_snapshot is not None:
             delta = _compute_delta(self._last_snapshot, snapshot)
             self._deltas[tick] = delta
@@ -193,8 +201,13 @@ class InMemoryHistoryStore:
     def get_errors(self, start_tick: int, end_tick: int) -> list[ErrorEventMessage]:
         """Return all errors in [start_tick, end_tick] inclusive."""
         result: list[ErrorEventMessage] = []
-        for tick in range(start_tick, end_tick + 1):
-            result.extend(self._errors.get(tick, []))
+        for tick in self._tick_order:
+            if tick < start_tick:
+                continue
+            if tick > end_tick:
+                break
+            if tick in self._errors:
+                result.extend(self._errors[tick])
         return result
 
     def get_errors_for_entity(
@@ -212,8 +225,13 @@ class InMemoryHistoryStore:
     def get_spans(self, start_tick: int, end_tick: int) -> list[SpanEventMessage]:
         """Return all spans in [start_tick, end_tick] inclusive."""
         result: list[SpanEventMessage] = []
-        for tick in range(start_tick, end_tick + 1):
-            result.extend(self._spans.get(tick, []))
+        for tick in self._tick_order:
+            if tick < start_tick:
+                continue
+            if tick > end_tick:
+                break
+            if tick in self._spans:
+                result.extend(self._spans[tick])
         return result
 
     def get_spans_for_entity(
@@ -238,12 +256,17 @@ class InMemoryHistoryStore:
 
         if was_checkpoint:
             old_snapshot = self._checkpoints.pop(old_tick)
+            idx = bisect.bisect_left(self._checkpoint_ticks, old_tick)
+            if idx < len(self._checkpoint_ticks) and self._checkpoint_ticks[idx] == old_tick:
+                self._checkpoint_ticks.pop(idx)
             # If the next tick exists and is a delta, promote it to a checkpoint
             if self._tick_order:
                 next_tick = self._tick_order[0]
                 if next_tick in self._deltas:
                     delta = self._deltas.pop(next_tick)
-                    self._checkpoints[next_tick] = _apply_delta(old_snapshot, delta)
+                    promoted = _apply_delta(old_snapshot, delta)
+                    self._checkpoints[next_tick] = promoted
+                    bisect.insort(self._checkpoint_ticks, next_tick)
         else:
             self._deltas.pop(old_tick, None)
 
@@ -255,15 +278,11 @@ class InMemoryHistoryStore:
         if tick in self._checkpoints:
             return self._checkpoints[tick].model_copy(deep=True)
 
-        checkpoint_tick = None
-        for t in self._tick_order:
-            if t > tick:
-                break
-            if t in self._checkpoints:
-                checkpoint_tick = t
-
-        if checkpoint_tick is None:
+        # O(log N) checkpoint lookup via bisect
+        idx = bisect.bisect_right(self._checkpoint_ticks, tick) - 1
+        if idx < 0:
             return None
+        checkpoint_tick = self._checkpoint_ticks[idx]
 
         snapshot = self._checkpoints[checkpoint_tick].model_copy(deep=True)
         for t in self._tick_order:
@@ -283,6 +302,7 @@ class InMemoryHistoryStore:
 
     def clear(self) -> None:
         self._checkpoints.clear()
+        self._checkpoint_ticks.clear()
         self._deltas.clear()
         self._errors.clear()
         self._spans.clear()

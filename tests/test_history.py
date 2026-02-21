@@ -91,7 +91,12 @@ class TestApplyDelta:
 
     def test_apply_modify(self):
         snap = make_snapshot(0, [make_entity(1, Position={"x": 0})])
-        diff = ComponentDiff(component_type="Position", old_value={"x": 0}, new_value={"x": 5})
+        diff = ComponentDiff(
+            component_type="Position",
+            type_name="m.Position",
+            old_value={"x": 0},
+            new_value={"x": 5},
+        )
 
         td = TickDelta(tick=1, timestamp=1.0, modified={1: [diff]})
         result = _apply_delta(snap, td)
@@ -106,6 +111,39 @@ class TestApplyDelta:
         assert reconstructed.tick == 1
         ids = {e.id for e in reconstructed.entities}
         assert ids == {1, 3}
+
+    def test_type_name_preserved_in_diff(self):
+        """ComponentDiff stores full type_name from source component."""
+        old = make_entity(1, Position={"x": 0})
+        new = make_entity(1, Position={"x": 5})
+        diffs = _diff_entity(old, new)
+        assert diffs[0].type_name == "m.Position"
+
+    def test_type_name_preserved_through_delta_apply(self):
+        """_apply_delta reconstructs components with correct type_name, not 'unknown.X'."""
+        old = make_snapshot(0, [make_entity(1, Position={"x": 0})])
+        new = make_snapshot(1, [make_entity(1, Position={"x": 5})])
+        delta = _compute_delta(old, new)
+        result = _apply_delta(old, delta)
+        comp = result.entities[0].components[0]
+        assert comp.type_name == "m.Position"
+        assert comp.type_short == "Position"
+
+    def test_type_name_preserved_after_eviction(self):
+        """After checkpoint eviction + delta promotion, type_name is still correct."""
+        store = InMemoryHistoryStore(max_ticks=3, checkpoint_interval=5)
+        # Tick 0 = checkpoint, tick 1 = delta (component added), tick 2 = delta
+        store.record_tick(make_snapshot(0, [make_entity(1, A={"v": 0})]))
+        store.record_tick(make_snapshot(1, [make_entity(1, A={"v": 1}, B={"w": 10})]))
+        store.record_tick(make_snapshot(2, [make_entity(1, A={"v": 2}, B={"w": 20})]))
+        # Tick 3 evicts tick 0, promoting tick 1 (delta->checkpoint via _apply_delta)
+        store.record_tick(make_snapshot(3, [make_entity(1, A={"v": 3}, B={"w": 30})]))
+
+        result = store.get_snapshot(1)
+        assert result is not None
+        comps = {c.type_short: c for c in result.entities[0].components}
+        assert comps["A"].type_name == "m.A"
+        assert comps["B"].type_name == "m.B"
 
 
 class TestInMemoryHistoryStore:
@@ -190,6 +228,28 @@ class TestInMemoryHistoryStore:
             store.record_tick(make_snapshot(i, [make_entity(1, A={"v": i})]))
         assert store.tick_count == 100
         assert store.stored_ticks[0] == 100
+
+    def test_sparse_tick_range_query(self):
+        """Error/span queries on sparse ticks don't iterate empty range."""
+        store = InMemoryHistoryStore(max_ticks=100, checkpoint_interval=100)
+        store.record_tick(make_snapshot(0, [make_entity(1, A={})]))
+        store.record_tick(make_snapshot(10000, [make_entity(1, A={})]))
+        store.record_error(
+            ErrorEventMessage(tick=10000, entity_id=1, message="e", severity=ErrorSeverity.warning)
+        )
+        # This should be fast (2 stored ticks), not 10001 iterations
+        errors = store.get_errors(0, 10000)
+        assert len(errors) == 1
+
+    def test_bisect_checkpoint_lookup(self):
+        """get_snapshot uses bisect, not linear scan, for checkpoint lookup."""
+        store = InMemoryHistoryStore(max_ticks=10000, checkpoint_interval=100)
+        for i in range(1000):
+            store.record_tick(make_snapshot(i, [make_entity(1, A={"v": i})]))
+        result = store.get_snapshot(999)
+        assert result is not None
+        comps = {c.type_short: c.data for c in result.entities[0].components}
+        assert comps["A"]["v"] == 999
 
 
 class TestErrorStorage:

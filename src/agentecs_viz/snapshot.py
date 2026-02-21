@@ -28,9 +28,13 @@ class EntitySnapshot(BaseModel):
 class WorldSnapshot(BaseModel):
     tick: int = Field(default=0, description="Current tick number")
     timestamp: float = Field(default=0.0, description="Timestamp of the snapshot")
-    entity_count: int = Field(default=0, description="Total entity count")
     entities: list[EntitySnapshot] = Field(default_factory=list, description="All entity snapshots")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Optional world metadata")
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def entity_count(self) -> int:
+        return len(self.entities)
 
     @computed_field  # type: ignore[misc]
     @property
@@ -40,6 +44,7 @@ class WorldSnapshot(BaseModel):
 
 class ComponentDiff(BaseModel):
     component_type: str = Field(description="Short component type name")
+    type_name: str = Field(description="Fully qualified component type name")
     old_value: dict[str, Any] | None = Field(default=None, description="Previous value")
     new_value: dict[str, Any] | None = Field(default=None, description="Current value")
 
