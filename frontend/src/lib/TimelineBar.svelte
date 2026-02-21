@@ -96,6 +96,7 @@
   }
 
   function commitTickEdit(): void {
+    if (!editingTick) return;
     editingTick = false;
     const val = parseInt(tickInputValue, 10);
     if (!isNaN(val)) {
@@ -231,7 +232,7 @@
       <input
         bind:this={tickInputEl}
         bind:value={tickInputValue}
-        class="w-[{tickInputWidth + 1}ch] rounded border border-accent bg-bg-primary px-1.5 py-0.5 text-right text-sm text-text-primary outline-none"
+        class="rounded border border-accent bg-bg-primary px-1.5 py-0.5 text-right text-sm text-text-primary outline-none"
         style="width: {tickInputWidth + 1}ch"
         onblur={commitTickEdit}
         onkeydown={handleTickInputKeydown}
