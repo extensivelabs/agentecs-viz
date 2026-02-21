@@ -18,10 +18,8 @@ export function matchesQuery(
 ): boolean {
   if (query.clauses.length === 0) return true;
 
-  const components = new Set(entity.archetype);
-
   for (const clause of query.clauses) {
-    const has = components.has(clause.component);
+    const has = entity.archetype.includes(clause.component);
     if (clause.type === "with" && !has) return false;
     if (clause.type === "without" && has) return false;
   }

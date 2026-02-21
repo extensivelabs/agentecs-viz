@@ -86,9 +86,11 @@
           >
             {clause.type === "with" ? "WITH" : "NOT"} {clause.component}
             <button
+              type="button"
               class="ml-0.5 hover:text-text-primary"
               onclick={() => removeClause(i)}
               data-testid="remove-clause"
+              aria-label={"Remove " + clause.component + " clause"}
             >&times;</button>
           </span>
         {/each}

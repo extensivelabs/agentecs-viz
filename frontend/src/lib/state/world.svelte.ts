@@ -388,25 +388,29 @@ export class WorldState {
   }
 
   saveQuery(query: QueryDef): void {
-    if (!query.name || query.clauses.length === 0) return;
-    const existing = this.savedQueries.findIndex((q) => q.name === query.name);
+    const name = query.name.trim();
+    if (!name || query.clauses.length === 0) return;
+    const normalized = { ...query, name };
+    const existing = this.savedQueries.findIndex((q) => q.name === name);
     if (existing >= 0) {
       this.savedQueries = [
         ...this.savedQueries.slice(0, existing),
-        query,
+        normalized,
         ...this.savedQueries.slice(existing + 1),
       ];
     } else {
-      this.savedQueries = [...this.savedQueries, query];
+      this.savedQueries = [...this.savedQueries, normalized];
     }
   }
 
   deleteSavedQuery(name: string): void {
-    this.savedQueries = this.savedQueries.filter((q) => q.name !== name);
+    const trimmed = name.trim();
+    this.savedQueries = this.savedQueries.filter((q) => q.name !== trimmed);
   }
 
   loadQuery(name: string): void {
-    const query = this.savedQueries.find((q) => q.name === name);
+    const trimmed = name.trim();
+    const query = this.savedQueries.find((q) => q.name === trimmed);
     if (query) {
       this.activeQuery = { ...query, clauses: [...query.clauses] };
     }
