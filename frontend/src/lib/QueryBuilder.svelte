@@ -16,7 +16,7 @@
 
   const suggestions = $derived(
     inputValue.length > 0
-      ? filterSuggestions(world.availableComponents, inputValue, usedComponents)
+      ? filterSuggestions(world.getAvailableComponents(), inputValue, usedComponents)
       : [],
   );
 

@@ -1,7 +1,7 @@
 import { TOKEN_COST_BUDGET_USD, WS_URL } from "../config";
 import { diffEntity, type EntityDiff } from "../diff";
 import {
-  getAvailableComponents,
+  getAvailableComponents as queryAvailableComponents,
   matchingEntityIds,
   type QueryDef,
 } from "../query";
@@ -21,31 +21,51 @@ import { WebSocketClient } from "../websocket";
 
 export type PlaybackMode = "live" | "paused" | "history" | "replay";
 
+type AggregatedSpanUsage = {
+  totals: SpanUsageTotals;
+  byModel: ModelUsageTotals[];
+};
+
+type SpanUsageFrame = {
+  tick: number;
+  usage: AggregatedSpanUsage;
+};
+
+const EMPTY_SPAN_USAGE: AggregatedSpanUsage = {
+  totals: {
+    prompt: 0,
+    completion: 0,
+    total: 0,
+    costUsd: 0,
+  },
+  byModel: [],
+};
+
 export class WorldState {
   connectionState: ConnectionState = $state("disconnected");
-  snapshot: WorldSnapshot | null = $state(null);
+  snapshot: WorldSnapshot | null = $state.raw(null);
   lastError: string | null = $state(null);
   isPaused: boolean = $state(false);
   isReplayPlaying: boolean = $state(false);
   supportsHistory: boolean = $state(false);
   tickRange: [number, number] | null = $state(null);
-  config: VisualizationConfig | null = $state(null);
+  config: VisualizationConfig | null = $state.raw(null);
   selectedEntityId: number | null = $state(null);
 
   newEntityIds: Set<number> = $state(new Set());
   changedEntityIds: Set<number> = $state(new Set());
 
-  errors: ErrorEventMessage[] = $state([]);
+  errors: ErrorEventMessage[] = $state.raw([]);
   errorPanelOpen: boolean = $state(false);
 
-  spans: SpanEventMessage[] = $state([]);
+  spans: SpanEventMessage[] = $state.raw([]);
   selectedSpanId: string | null = $state(null);
 
   activeQuery: QueryDef | null = $state(null);
   savedQueries: QueryDef[] = $state([]);
 
-  previousSnapshot: WorldSnapshot | null = $state(null);
-  pinnedEntityState: Map<number, EntitySnapshot> | null = $state(null);
+  previousSnapshot: WorldSnapshot | null = $state.raw(null);
+  pinnedEntityState: Map<number, EntitySnapshot> | null = $state.raw(null);
   pinnedTick: number | null = $state(null);
 
   private client: WebSocketClient | null = null;
@@ -101,7 +121,7 @@ export class WorldState {
   );
 
   currentTickErrors: ErrorEventMessage[] = $derived(
-    this.errors.filter((e) => e.tick === this.tick),
+    this.visibleErrors.filter((e) => e.tick === this.tick),
   );
 
   errorEntityIds: Set<number> = $derived(
@@ -144,8 +164,65 @@ export class WorldState {
 
   spanCount: number = $derived(this.visibleSpans.length);
 
-  spanUsage: { totals: SpanUsageTotals; byModel: ModelUsageTotals[] } = $derived(
-    aggregateSpanUsage(this.visibleSpans),
+  private spanUsageTimeline: SpanUsageFrame[] = $derived.by(() => {
+    const spansByTick = new Map<number, SpanEventMessage[]>();
+    for (const span of this.spans) {
+      const tick = span.attributes["agentecs.tick"];
+      if (typeof tick !== "number") continue;
+      const atTick = spansByTick.get(tick);
+      if (atTick) {
+        atTick.push(span);
+      } else {
+        spansByTick.set(tick, [span]);
+      }
+    }
+
+    const ticks = [...spansByTick.keys()].sort((a, b) => a - b);
+    const timeline: SpanUsageFrame[] = [];
+    const runningTotals: SpanUsageTotals = {
+      prompt: 0,
+      completion: 0,
+      total: 0,
+      costUsd: 0,
+    };
+    const runningByModel = new Map<string, ModelUsageTotals>();
+
+    for (const tick of ticks) {
+      const usageAtTick = aggregateSpanUsage(spansByTick.get(tick) ?? []);
+      runningTotals.prompt += usageAtTick.totals.prompt;
+      runningTotals.completion += usageAtTick.totals.completion;
+      runningTotals.total += usageAtTick.totals.total;
+      runningTotals.costUsd += usageAtTick.totals.costUsd;
+
+      for (const modelUsage of usageAtTick.byModel) {
+        const current = runningByModel.get(modelUsage.model) ?? {
+          model: modelUsage.model,
+          prompt: 0,
+          completion: 0,
+          total: 0,
+          costUsd: 0,
+        };
+        current.prompt += modelUsage.prompt;
+        current.completion += modelUsage.completion;
+        current.total += modelUsage.total;
+        current.costUsd += modelUsage.costUsd;
+        runningByModel.set(modelUsage.model, current);
+      }
+
+      timeline.push({
+        tick,
+        usage: {
+          totals: { ...runningTotals },
+          byModel: [...runningByModel.values()].sort((a, b) => b.costUsd - a.costUsd),
+        },
+      });
+    }
+
+    return timeline;
+  });
+
+  spanUsage: AggregatedSpanUsage = $derived.by(() =>
+    this.getSpanUsageAtTick(this.tick),
   );
 
   totalTokenUsage: SpanUsageTotals = $derived(this.spanUsage.totals);
@@ -168,9 +245,27 @@ export class WorldState {
     this.totalTokenUsage.costUsd >= this.tokenCostBudgetUsd,
   );
 
-  availableComponents: string[] = $derived(
-    getAvailableComponents(this.entities),
-  );
+  entityDiffs: Map<number, EntityDiff> = $derived.by(() => {
+    const diffs = new Map<number, EntityDiff>();
+    if (!this.previousSnapshot) return diffs;
+
+    const prevMap = new Map(
+      this.previousSnapshot.entities.map((e) => [e.id, e]),
+    );
+    const curMap = new Map(this.entities.map((e) => [e.id, e]));
+
+    for (const id of this.changedEntityIds) {
+      const prev = prevMap.get(id);
+      const cur = curMap.get(id);
+      if (!prev || !cur) continue;
+      const diff = diffEntity(prev, cur);
+      if (diff.totalChanges > 0) {
+        diffs.set(id, diff);
+      }
+    }
+
+    return diffs;
+  });
 
   matchingEntityIds: Set<number> = $derived(
     this.activeQuery && this.activeQuery.clauses.length > 0
@@ -184,32 +279,16 @@ export class WorldState {
 
   matchCount: number = $derived(this.matchingEntityIds.size);
 
-  selectedEntityDiff: EntityDiff | null = $derived.by(() => {
-    if (!this.selectedEntity || !this.previousSnapshot) return null;
-    const prev = this.previousSnapshot.entities.find(
-      (e) => e.id === this.selectedEntityId,
-    );
-    if (!prev) return null;
-    const diff = diffEntity(prev, this.selectedEntity);
-    return diff.totalChanges > 0 ? diff : null;
-  });
+  selectedEntityDiff: EntityDiff | null = $derived(
+    this.selectedEntityId !== null
+      ? this.entityDiffs.get(this.selectedEntityId) ?? null
+      : null,
+  );
 
   entityDiffCounts: Map<number, number> = $derived.by(() => {
     const counts = new Map<number, number>();
-    if (!this.previousSnapshot) return counts;
-    const prevMap = new Map(
-      this.previousSnapshot.entities.map((e) => [e.id, e]),
-    );
-    const curMap = new Map(this.entities.map((e) => [e.id, e]));
-    for (const id of this.changedEntityIds) {
-      const prev = prevMap.get(id);
-      const cur = curMap.get(id);
-      if (prev && cur) {
-        const diff = diffEntity(prev, cur);
-        if (diff.totalChanges > 0) {
-          counts.set(id, diff.totalChanges);
-        }
-      }
+    for (const [id, diff] of this.entityDiffs) {
+      counts.set(id, diff.totalChanges);
     }
     return counts;
   });
@@ -384,6 +463,10 @@ export class WorldState {
     this.activeQuery = query;
   }
 
+  getAvailableComponents(): string[] {
+    return queryAvailableComponents(this.entities);
+  }
+
   clearQuery(): void {
     this.activeQuery = null;
   }
@@ -464,15 +547,24 @@ export class WorldState {
         break;
 
       case "error_event": {
-        const updated = [...this.errors, msg];
-        this.errors = updated.length > 1000 ? updated.slice(-1000) : updated;
+        if (this.errors.length < 1000) {
+          this.errors = [...this.errors, msg];
+          break;
+        }
+        const nextErrors = this.errors.slice(1);
+        nextErrors.push(msg);
+        this.errors = nextErrors;
         break;
       }
 
       case "span_event": {
-        const updatedSpans = [...this.spans, msg];
-        this.spans =
-          updatedSpans.length > 2000 ? updatedSpans.slice(-2000) : updatedSpans;
+        if (this.spans.length < 2000) {
+          this.spans = [...this.spans, msg];
+          break;
+        }
+        const nextSpans = this.spans.slice(1);
+        nextSpans.push(msg);
+        this.spans = nextSpans;
         break;
       }
 
@@ -503,6 +595,26 @@ export class WorldState {
     this.entityHashes = newHashes;
     this.newEntityIds = newIds;
     this.changedEntityIds = changedIds;
+  }
+
+  private getSpanUsageAtTick(tick: number): AggregatedSpanUsage {
+    const timeline = this.spanUsageTimeline;
+    if (timeline.length === 0 || tick < timeline[0].tick) {
+      return EMPTY_SPAN_USAGE;
+    }
+
+    let low = 0;
+    let high = timeline.length - 1;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (timeline[mid].tick <= tick) {
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    return high >= 0 ? timeline[high].usage : EMPTY_SPAN_USAGE;
   }
 
   private startReplay(speed?: number): void {
