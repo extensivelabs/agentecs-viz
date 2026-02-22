@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import * as diffModule from "../lib/diff";
 import { WorldState } from "../lib/state/world.svelte";
 import type {
   DeltaMessage,
@@ -633,6 +634,47 @@ describe("WorldState", () => {
       expect(state.entityDiffCounts.has(2)).toBe(false);
     });
 
+    it("shares diff computation between selectedEntityDiff and entityDiffCounts", () => {
+      const diffSpy = vi.spyOn(diffModule, "diffEntity");
+
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot: makeSnapshot({ tick: 1 }),
+      } satisfies SnapshotMessage);
+
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick: 2,
+        snapshot: makeSnapshot({
+          tick: 2,
+          entities: [
+            {
+              id: 1,
+              archetype: ["Agent", "Position"],
+              components: [
+                { type_name: "Agent", type_short: "Agent", data: { name: "a1" } },
+                { type_name: "Position", type_short: "Position", data: { x: 1, y: 0 } },
+              ],
+            },
+            {
+              id: 2,
+              archetype: ["Task"],
+              components: [
+                { type_name: "Task", type_short: "Task", data: { status: "active" } },
+              ],
+            },
+          ],
+        }),
+      } satisfies SnapshotMessage);
+
+      state.selectEntity(1);
+
+      expect(state.selectedEntityDiff?.totalChanges).toBe(1);
+      expect(state.entityDiffCounts.get(1)).toBe(1);
+      expect(diffSpy).toHaveBeenCalledTimes(1);
+    });
+
     it("resets previousSnapshot on disconnect", () => {
       const snap1 = makeSnapshot({ tick: 1 });
       MockWebSocket.instances[0].simulateMessage({
@@ -1212,7 +1254,7 @@ describe("WorldState", () => {
     });
 
     it("availableComponents lists sorted unique component types", () => {
-      expect(state.availableComponents).toEqual(["Agent", "Position", "Task"]);
+      expect(state.getAvailableComponents()).toEqual(["Agent", "Position", "Task"]);
     });
 
     it("hasActiveFilter is false with no query", () => {
