@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 from typing import Any
 
+from agentecs_viz.config import VisualizationConfig
 from agentecs_viz.protocol import (
     AnyServerEvent,
     DeltaMessage,
@@ -157,7 +158,7 @@ class _StubSource:
         return None
 
     @property
-    def visualization_config(self) -> None:
+    def visualization_config(self) -> VisualizationConfig | None:
         return None
 
 
