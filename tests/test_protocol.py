@@ -135,12 +135,14 @@ class _StubSource:
 
     def subscribe(self) -> AsyncIterator[AnyServerEvent]:
         async def _empty() -> AsyncIterator[AnyServerEvent]:
+            if False:
+                yield ErrorMessage(tick=0, message="")
             return
-            yield  # noqa: RET504
 
         return _empty()
 
     async def send_command(self, command: str, **kwargs: Any) -> None: ...
+
     @property
     def is_connected(self) -> bool:
         return True
