@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 import time
 import uuid
-from typing import Any
+from typing import Any, NamedTuple
 
 from agentecs_viz.config import ArchetypeConfig, VisualizationConfig
 from agentecs_viz.history import InMemoryHistoryStore
@@ -44,32 +44,44 @@ EXECUTION_GROUPS: list[list[str]] = [
 # Systems that generate LLM/tool child spans.
 COMPLEX_SYSTEMS: set[str] = {"GoalPlanner", "TaskScheduler", "MemoryConsolidation"}
 
-LLM_MODELS = ["gpt-4o", "claude-sonnet-4-20250514", "gpt-4o-mini"]
 
-LLM_TOKEN_RANGES: list[tuple[tuple[int, int], tuple[int, int]]] = [
-    ((100, 2000), (50, 500)),
-    ((200, 3000), (100, 800)),
-    ((50, 500), (20, 200)),
-]
+class LLMProfile(NamedTuple):
+    """LLM model configuration for mock span generation."""
 
-LLM_MESSAGES: list[tuple[list[dict[str, str]], list[dict[str, str]]]] = [
-    (
-        [
+    model: str
+    prompt_token_range: tuple[int, int]
+    completion_token_range: tuple[int, int]
+    input_messages: list[dict[str, str]]
+    output_messages: list[dict[str, str]]
+
+
+LLM_PROFILES: list[LLMProfile] = [
+    LLMProfile(
+        model="gpt-4o",
+        prompt_token_range=(100, 2000),
+        completion_token_range=(50, 500),
+        input_messages=[
             {"role": "system", "content": "You are a helpful agent."},
             {"role": "user", "content": "Analyze the current task."},
         ],
-        [{"role": "assistant", "content": "I'll analyze the task."}],
+        output_messages=[{"role": "assistant", "content": "I'll analyze the task."}],
     ),
-    (
-        [
+    LLMProfile(
+        model="claude-sonnet-4-20250514",
+        prompt_token_range=(200, 3000),
+        completion_token_range=(100, 800),
+        input_messages=[
             {"role": "system", "content": "You are a planning agent."},
             {"role": "user", "content": "What should we do next?"},
         ],
-        [{"role": "assistant", "content": "I recommend the following."}],
+        output_messages=[{"role": "assistant", "content": "I recommend the following."}],
     ),
-    (
-        [{"role": "user", "content": "Summarize the results."}],
-        [{"role": "assistant", "content": "Here is a brief summary."}],
+    LLMProfile(
+        model="gpt-4o-mini",
+        prompt_token_range=(50, 500),
+        completion_token_range=(20, 200),
+        input_messages=[{"role": "user", "content": "Summarize the results."}],
+        output_messages=[{"role": "assistant", "content": "Here is a brief summary."}],
     ),
 ]
 
@@ -389,26 +401,23 @@ class MockWorldSource(TickLoopSource):
         start: float,
         duration: float,
     ) -> SpanEventMessage:
-        idx = random.randrange(len(LLM_MODELS))
-        model = LLM_MODELS[idx]
-        prompt_range, comp_range = LLM_TOKEN_RANGES[idx]
-        input_msgs, output_msgs = LLM_MESSAGES[idx]
+        profile = random.choice(LLM_PROFILES)
         return SpanEventMessage(
             span_id=uuid.uuid4().hex,
             trace_id=trace_id,
             parent_span_id=parent_id,
-            name=f"llm.{model}",
+            name=f"llm.{profile.model}",
             start_time=start,
             end_time=start + duration,
             status=SpanStatus.error if random.random() < 0.08 else SpanStatus.ok,
             attributes={
                 "agentecs.tick": self._tick,
                 "agentecs.entity_id": entity_id,
-                "gen_ai.request.model": model,
-                "gen_ai.usage.prompt_tokens": random.randint(*prompt_range),
-                "gen_ai.usage.completion_tokens": random.randint(*comp_range),
-                "gen_ai.request.messages": input_msgs,
-                "gen_ai.response.messages": output_msgs,
+                "gen_ai.request.model": profile.model,
+                "gen_ai.usage.prompt_tokens": random.randint(*profile.prompt_token_range),
+                "gen_ai.usage.completion_tokens": random.randint(*profile.completion_token_range),
+                "gen_ai.request.messages": profile.input_messages,
+                "gen_ai.response.messages": profile.output_messages,
             },
         )
 

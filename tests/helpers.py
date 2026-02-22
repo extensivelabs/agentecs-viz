@@ -1,7 +1,9 @@
+from typing import Any
+
 from agentecs_viz.snapshot import ComponentSnapshot, EntitySnapshot, WorldSnapshot
 
 
-def make_entity(eid: int, **comp_data: dict) -> EntitySnapshot:
+def make_entity(eid: int, **comp_data: dict[str, Any]) -> EntitySnapshot:
     components = [
         ComponentSnapshot(type_name=f"m.{name}", type_short=name, data=data)
         for name, data in comp_data.items()

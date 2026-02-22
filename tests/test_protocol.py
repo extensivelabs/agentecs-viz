@@ -121,8 +121,8 @@ class TestErrorEventMessage:
         assert ErrorSeverity.info == "info"
 
 
-class _StubSource(WorldStateSource):
-    """Minimal concrete subclass to test Protocol default property values."""
+class _StubSource:
+    """Minimal implementation satisfying WorldStateSource Protocol structurally."""
 
     async def connect(self) -> None: ...
     async def disconnect(self) -> None: ...
@@ -143,6 +143,22 @@ class _StubSource(WorldStateSource):
     @property
     def is_connected(self) -> bool:
         return True
+
+    @property
+    def is_paused(self) -> bool:
+        return False
+
+    @property
+    def supports_history(self) -> bool:
+        return False
+
+    @property
+    def tick_range(self) -> tuple[int, int] | None:
+        return None
+
+    @property
+    def visualization_config(self) -> None:
+        return None
 
 
 class TestWorldStateSourceProtocol:
