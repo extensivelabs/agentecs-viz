@@ -21,6 +21,7 @@
     MIN_HIT_RADIUS,
     entityRadius,
     adaptiveMaxRadius,
+    clampTooltipPosition,
     VIEWPORT_FIT_PADDING,
   } from "./rendering";
 
@@ -50,6 +51,7 @@
   let lastLayoutEntities: EntitySnapshot[] | null = null;
   let lastSyncedEntities: EntitySnapshot[] | null = null;
   let lastLayoutMode: LayoutMode = "spatial";
+  let lastLayoutStatusFieldsKey = "";
   let cachedColumns: ColumnInfo[] = [];
 
   let animatingFrom: Map<number, EntityPosition> | null = null;
@@ -64,6 +66,8 @@
   let tooltipX: number = $state(0);
   let tooltipY: number = $state(0);
   let tooltipVisible: boolean = $state(false);
+  let tooltipMeasuredWidth = 220;
+  let tooltipMeasuredHeight = 44;
   let hoveredEntityId: number | null = null;
   let tooltipAnchorX = 0;
   let tooltipAnchorY = 0;
@@ -189,17 +193,31 @@
     return currentViewLevel === "detail" && animatingFrom === null;
   }
 
+  function updateTooltipMeasurements(): { width: number; height: number } {
+    const width = tooltipEl?.offsetWidth ?? 0;
+    const height = tooltipEl?.offsetHeight ?? 0;
+
+    if (width > 0) tooltipMeasuredWidth = width;
+    if (height > 0) tooltipMeasuredHeight = height;
+
+    return { width, height };
+  }
+
   function setTooltipPosition(rawX: number, rawY: number): void {
     tooltipAnchorX = rawX;
     tooltipAnchorY = rawY;
 
-    const tooltipWidth = tooltipEl?.offsetWidth ?? 220;
-    const tooltipHeight = tooltipEl?.offsetHeight ?? 44;
-    const maxX = Math.max(4, containerEl.clientWidth - tooltipWidth - 4);
-    const maxY = Math.max(4, containerEl.clientHeight - tooltipHeight - 4);
+    const clamped = clampTooltipPosition(
+      rawX,
+      rawY,
+      containerEl.clientWidth,
+      containerEl.clientHeight,
+      tooltipMeasuredWidth,
+      tooltipMeasuredHeight,
+    );
 
-    tooltipX = Math.min(Math.max(4, rawX), maxX);
-    tooltipY = Math.min(Math.max(4, rawY), maxY);
+    tooltipX = clamped.x;
+    tooltipY = clamped.y;
   }
 
   function createEntityVisualState(entityId: number): EntityVisualState {
@@ -445,7 +463,13 @@
 
     const entities = world.entities;
     const mode = layoutMode;
-    const needsRecompute = entities !== lastLayoutEntities || mode !== lastLayoutMode;
+    const statusFields = getStatusFields();
+    const statusFieldsKey = statusFields.join("\u0000");
+    const needsRecompute = (
+      entities !== lastLayoutEntities
+      || mode !== lastLayoutMode
+      || statusFieldsKey !== lastLayoutStatusFieldsKey
+    );
     if (!needsRecompute) return;
 
     const prevPositions = new Map<number, EntityPosition>();
@@ -460,7 +484,7 @@
       cancelAnimation();
     }
 
-    const nextLayout = computeLayout(entities, mode, getStatusFields());
+    const nextLayout = computeLayout(entities, mode, statusFields);
     cachedColumns = nextLayout.columns;
 
     for (const state of entityVisualStates.values()) {
@@ -478,6 +502,7 @@
 
     lastLayoutEntities = entities;
     lastLayoutMode = mode;
+    lastLayoutStatusFieldsKey = statusFieldsKey;
     updateColumnHeaders();
 
     if (modeChanged) {
@@ -588,7 +613,11 @@
       lastLayoutEntities = null;
       lastSyncedEntities = null;
       lastLayoutMode = "spatial";
+      lastLayoutStatusFieldsKey = "";
       initialFitDone = false;
+
+      tooltipMeasuredWidth = 220;
+      tooltipMeasuredHeight = 44;
 
       filterActive = false;
       filterMatches = new Set<number>();
@@ -647,15 +676,20 @@
       app.stage.addChild(viewport);
       viewport.fitWorld(true);
 
-      const onViewportChanged = () => {
+      const onZoomed = () => {
         updateViewLevel();
         updateColumnHeaders();
         updateAllLabels();
         updateAllBadges();
       };
 
-      viewport.on("zoomed", onViewportChanged);
-      viewport.on("moved", onViewportChanged);
+      const onMoved = () => {
+        updateViewLevel();
+        updateColumnHeaders();
+      };
+
+      viewport.on("zoomed", onZoomed);
+      viewport.on("moved", onMoved);
 
       updateViewLevel();
     }
@@ -700,6 +734,8 @@
       hoveredEntityId = null;
       tooltipVisible = false;
       tooltipEl = null;
+      tooltipMeasuredWidth = 220;
+      tooltipMeasuredHeight = 44;
 
       if (app && !initFailed) {
         try {
@@ -716,6 +752,7 @@
 
   $effect(() => {
     const entities = world.entities;
+    void world.config;
     void layoutMode;
     void viewport;
 
@@ -862,8 +899,7 @@
         return;
       }
 
-      const width = tooltipEl?.offsetWidth ?? 0;
-      const height = tooltipEl?.offsetHeight ?? 0;
+      const { width, height } = updateTooltipMeasurements();
 
       if (width === 0 && height === 0 && retries > 0) {
         retries -= 1;

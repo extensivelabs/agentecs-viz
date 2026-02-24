@@ -46,3 +46,21 @@ export function entityRadius(componentCount: number, maxRadius: number = DETAIL_
   const r = DETAIL_BASE_RADIUS + componentCount * DETAIL_PER_COMPONENT;
   return Math.max(DETAIL_MIN_RADIUS, Math.min(cap, r));
 }
+
+export function clampTooltipPosition(
+  rawX: number,
+  rawY: number,
+  containerWidth: number,
+  containerHeight: number,
+  tooltipWidth: number,
+  tooltipHeight: number,
+  padding: number = 4,
+): { x: number; y: number } {
+  const maxX = Math.max(padding, containerWidth - tooltipWidth - padding);
+  const maxY = Math.max(padding, containerHeight - tooltipHeight - padding);
+
+  return {
+    x: Math.min(Math.max(padding, rawX), maxX),
+    y: Math.min(Math.max(padding, rawY), maxY),
+  };
+}
