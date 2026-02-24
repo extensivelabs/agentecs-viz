@@ -97,4 +97,45 @@ describe("TracesTab", () => {
     expect(screen.getByTestId("llm-detail")).toBeDefined();
     expect(screen.getByText("gpt-4o")).toBeDefined();
   });
+
+  it("renders non-string message content safely", () => {
+    sendSnapshot(3);
+    sendSpan(1, 1, {
+      span_id: "llm-non-string",
+      name: "llm.gpt-4o",
+      attributes: {
+        "agentecs.tick": 1,
+        "agentecs.entity_id": 1,
+        "gen_ai.request.model": "gpt-4o",
+        "gen_ai.request.messages": [{ role: "user", content: { prompt: "Hello" } }],
+        "gen_ai.response.messages": [{ role: "assistant", content: 42 }],
+      },
+    });
+    world.selectSpan("llm-non-string");
+
+    render(TracesTab);
+    expect(screen.getByText('{"prompt":"Hello"}')).toBeDefined();
+    expect(screen.getByText("42")).toBeDefined();
+  });
+
+  it("renders non-object tool input and output safely", () => {
+    sendSnapshot(3);
+    sendSpan(1, 1, {
+      span_id: "tool-primitive",
+      name: "tool.search",
+      attributes: {
+        "agentecs.tick": 1,
+        "agentecs.entity_id": 1,
+        "tool.name": "web_search",
+        "tool.input": "query text",
+        "tool.output": 7,
+      },
+    });
+    world.selectSpan("tool-primitive");
+
+    render(TracesTab);
+    expect(screen.getByTestId("tool-detail")).toBeDefined();
+    expect(screen.getByText("query text")).toBeDefined();
+    expect(screen.getAllByText("7").length).toBeGreaterThan(0);
+  });
 });

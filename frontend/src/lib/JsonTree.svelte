@@ -14,6 +14,31 @@
   let { data, statusFields = [], errorFields = [], depth = 0, diff, pathPrefix = [] }: Props = $props();
 
   let collapsed = $state<Record<string, boolean>>({});
+  const PATH_SEPARATOR = "\u001f";
+
+  function pathKey(path: string[]): string {
+    return path.join(PATH_SEPARATOR);
+  }
+
+  let fieldChanges = $derived.by(() => {
+    const map = new Map<string, FieldChange>();
+    if (!diff) return map;
+    for (const change of diff) {
+      map.set(pathKey(change.path), change);
+    }
+    return map;
+  });
+
+  let nestedChangePrefixes = $derived.by(() => {
+    const prefixes = new Set<string>();
+    if (!diff) return prefixes;
+    for (const change of diff) {
+      if (change.path.length <= pathPrefix.length + 1) continue;
+      if (!pathPrefix.every((p, i) => p === change.path[i])) continue;
+      prefixes.add(pathKey(change.path.slice(0, pathPrefix.length + 1)));
+    }
+    return prefixes;
+  });
 
   function isCollapsed(key: string, nestedDefault = false): boolean {
     return collapsed[key] ?? (nestedDefault || depth > 0);
@@ -48,24 +73,11 @@
   }
 
   function getFieldChange(key: string): FieldChange | undefined {
-    if (!diff) return undefined;
-    const target = [...pathPrefix, key];
-    return diff.find(
-      (c) => c.path.length === target.length && c.path.every((p, i) => p === target[i]),
-    );
-  }
-
-  function getNestedChanges(key: string): FieldChange[] | undefined {
-    if (!diff) return undefined;
-    const prefix = [...pathPrefix, key];
-    const nested = diff.filter(
-      (c) => c.path.length > prefix.length && prefix.every((p, i) => p === c.path[i]),
-    );
-    return nested.length > 0 ? nested : undefined;
+    return fieldChanges.get(pathKey([...pathPrefix, key]));
   }
 
   function hasNestedChanges(key: string): boolean {
-    return !!getNestedChanges(key);
+    return nestedChangePrefixes.has(pathKey([...pathPrefix, key]));
   }
 
   function formatValue(value: unknown): string {

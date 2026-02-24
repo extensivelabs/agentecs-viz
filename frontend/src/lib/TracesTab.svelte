@@ -40,6 +40,11 @@
     selectedSpan ? getTokenCounts(selectedSpan.attributes) : null,
   );
 
+  type DisplayMessage = {
+    role: string;
+    content: string;
+  };
+
   function flattenTree(nodes: SpanTreeNode[]): SpanTreeNode[] {
     const result: SpanTreeNode[] = [];
     function walk(node: SpanTreeNode) {
@@ -81,12 +86,40 @@
     return `${(ms / 1000).toFixed(2)}s`;
   }
 
-  function spanMessages(span: SpanEventMessage): Array<Record<string, string>> {
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+
+  function asObject(value: unknown): Record<string, unknown> | null {
+    return isRecord(value) ? value : null;
+  }
+
+  function formatAttributeValue(value: unknown): string {
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") {
+      return String(value);
+    }
+    if (value === null) return "null";
+    if (value === undefined) return "";
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  function spanMessages(span: SpanEventMessage): DisplayMessage[] {
     const input = span.attributes["gen_ai.request.messages"];
     const output = span.attributes["gen_ai.response.messages"];
-    const msgs: Array<Record<string, string>> = [];
-    if (Array.isArray(input)) msgs.push(...(input as Array<Record<string, string>>));
-    if (Array.isArray(output)) msgs.push(...(output as Array<Record<string, string>>));
+    const msgs: DisplayMessage[] = [];
+    for (const batch of [input, output]) {
+      if (!Array.isArray(batch)) continue;
+      for (const msg of batch) {
+        if (!isRecord(msg)) continue;
+        const role = typeof msg.role === "string" ? msg.role : "message";
+        msgs.push({ role, content: formatAttributeValue(msg.content) });
+      }
+    }
     return msgs;
   }
 
@@ -219,11 +252,10 @@
                 <span>Total: <span class="text-text-secondary">{selectedSpanTokens.total}</span></span>
               </div>
             {/if}
-            {#if selectedSpan.attributes["gen_ai.request.messages"]}
-              {@const msgs = spanMessages(selectedSpan)}
+            {#if spanMessages(selectedSpan).length > 0}
               <div class="mt-2">
                 <div class="mb-1 text-xs font-medium text-text-muted">Messages</div>
-                {#each msgs as msg, i (i)}
+                {#each spanMessages(selectedSpan) as msg, i (i)}
                   <div
                     class="mb-1 rounded px-2 py-1.5 text-sm {msg.role === 'user' ? 'bg-accent/10' : msg.role === 'assistant' ? 'bg-purple-500/10' : 'bg-bg-tertiary'}"
                   >
@@ -238,23 +270,35 @@
 
         {#if selectedSpanType === "tool"}
           <div class="border-b border-bg-tertiary px-4 py-2" data-testid="tool-detail">
-            {#if selectedSpan.attributes["tool.name"]}
+            {#if selectedSpan.attributes["tool.name"] !== undefined}
               <div class="mb-2">
                 <span class="rounded-full bg-cyan-500/20 px-2.5 py-0.5 text-sm text-cyan-400">
-                  {selectedSpan.attributes["tool.name"]}
+                  {formatAttributeValue(selectedSpan.attributes["tool.name"])}
                 </span>
               </div>
             {/if}
-            {#if selectedSpan.attributes["tool.input"]}
+            {#if selectedSpan.attributes["tool.input"] !== undefined}
               <div class="mb-1 text-xs font-medium text-text-muted">Input</div>
               <div class="mb-2">
-                <JsonTree data={selectedSpan.attributes["tool.input"] as Record<string, unknown>} />
+                {#if asObject(selectedSpan.attributes["tool.input"])}
+                  <JsonTree data={asObject(selectedSpan.attributes["tool.input"])!} />
+                {:else}
+                  <div class="rounded bg-bg-tertiary px-2 py-1 text-sm text-text-secondary break-all">
+                    {formatAttributeValue(selectedSpan.attributes["tool.input"])}
+                  </div>
+                {/if}
               </div>
             {/if}
-            {#if selectedSpan.attributes["tool.output"]}
+            {#if selectedSpan.attributes["tool.output"] !== undefined}
               <div class="mb-1 text-xs font-medium text-text-muted">Output</div>
               <div>
-                <JsonTree data={selectedSpan.attributes["tool.output"] as Record<string, unknown>} />
+                {#if asObject(selectedSpan.attributes["tool.output"])}
+                  <JsonTree data={asObject(selectedSpan.attributes["tool.output"])!} />
+                {:else}
+                  <div class="rounded bg-bg-tertiary px-2 py-1 text-sm text-text-secondary break-all">
+                    {formatAttributeValue(selectedSpan.attributes["tool.output"])}
+                  </div>
+                {/if}
               </div>
             {/if}
           </div>
@@ -272,7 +316,7 @@
 
         <div class="px-4 py-2">
           <div class="mb-1 text-xs font-medium text-text-muted">Attributes</div>
-          <JsonTree data={selectedSpan.attributes as Record<string, unknown>} />
+          <JsonTree data={selectedSpan.attributes} />
         </div>
       </div>
     {:else}

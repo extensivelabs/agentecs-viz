@@ -60,9 +60,10 @@
                 data-testid="error-entity"
               >Entity</button>
               <button
-                class="rounded px-2 py-0.5 text-xs text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
-                onclick={() => world.selectEntity(error.entity_id)}
+                class="rounded px-2 py-0.5 text-xs text-text-muted disabled:cursor-not-allowed disabled:opacity-60"
+                disabled
                 data-testid="error-trace"
+                title="Trace jump not implemented yet"
               >Trace</button>
             </div>
           </div>
