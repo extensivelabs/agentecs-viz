@@ -75,4 +75,22 @@ describe("ErrorPanel", () => {
       expect(screen.getByText("INFO")).toBeTruthy();
     });
   });
+
+  it("shows Trace action as disabled placeholder", async () => {
+    const snapshot = makeSnapshot({ tick: 2 });
+    MockWebSocket.instances[0].simulateMessage({
+      type: "snapshot",
+      tick: 2,
+      snapshot,
+    } satisfies SnapshotMessage);
+    MockWebSocket.instances[0].simulateMessage(makeErrorEvent(2, 1, "needs trace"));
+
+    world.toggleErrorPanel();
+    render(ErrorPanel);
+
+    await vi.waitFor(() => {
+      const traceButton = screen.getByTestId("error-trace") as HTMLButtonElement;
+      expect(traceButton.disabled).toBe(true);
+    });
+  });
 });

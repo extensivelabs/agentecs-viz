@@ -24,6 +24,7 @@ export interface LayoutResult {
 export const PIPELINE_HEADER_Y = 80;
 const PIPELINE_COLUMN_PADDING = 40;
 const UNKNOWN_STATUS = "(unknown)";
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
 function hasPositionComponent(entity: EntitySnapshot): { x: number; y: number } | null {
   for (const comp of entity.components) {
@@ -40,7 +41,7 @@ function hasPositionComponent(entity: EntitySnapshot): { x: number; y: number } 
 
 function spiralPosition(index: number, centerX: number, centerY: number, spacing: number): { x: number; y: number } {
   if (index === 0) return { x: centerX, y: centerY };
-  const angle = index * 2.4; // golden angle
+  const angle = index * GOLDEN_ANGLE;
   const radius = spacing * Math.sqrt(index);
   return {
     x: centerX + Math.cos(angle) * radius,

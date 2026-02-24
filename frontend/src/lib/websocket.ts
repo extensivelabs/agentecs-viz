@@ -60,13 +60,25 @@ export class WebSocketClient {
     };
 
     ws.onmessage = (event: MessageEvent) => {
+      let data: unknown;
       try {
-        const data: unknown = JSON.parse(event.data as string);
-        if (isServerMessage(data)) {
-          this.callbacks.onMessage(data);
-        }
+        data = JSON.parse(event.data as string);
       } catch {
         console.warn("[ws] malformed message:", event.data);
+        return;
+      }
+
+      if (isServerMessage(data)) {
+        this.callbacks.onMessage(data);
+        return;
+      }
+
+      if (
+        typeof data === "object" &&
+        data !== null &&
+        typeof (data as Record<string, unknown>).type === "string"
+      ) {
+        console.warn("[ws] unknown message type:", (data as Record<string, unknown>).type);
       }
     };
 
