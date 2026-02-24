@@ -39,6 +39,9 @@
   let selectedSpanTokens = $derived(
     selectedSpan ? getTokenCounts(selectedSpan.attributes) : null,
   );
+  let selectedSpanMessages: DisplayMessage[] = $derived.by(() => (
+    selectedSpan ? spanMessages(selectedSpan) : []
+  ));
 
   type DisplayMessage = {
     role: string;
@@ -252,10 +255,10 @@
                 <span>Total: <span class="text-text-secondary">{selectedSpanTokens.total}</span></span>
               </div>
             {/if}
-            {#if spanMessages(selectedSpan).length > 0}
+            {#if selectedSpanMessages.length > 0}
               <div class="mt-2">
                 <div class="mb-1 text-xs font-medium text-text-muted">Messages</div>
-                {#each spanMessages(selectedSpan) as msg, i (i)}
+                {#each selectedSpanMessages as msg, i (i)}
                   <div
                     class="mb-1 rounded px-2 py-1.5 text-sm {msg.role === 'user' ? 'bg-accent/10' : msg.role === 'assistant' ? 'bg-purple-500/10' : 'bg-bg-tertiary'}"
                   >

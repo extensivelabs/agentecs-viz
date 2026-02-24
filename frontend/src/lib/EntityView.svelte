@@ -453,8 +453,8 @@
       redrawEntityVisual(entity.id);
       if (!animatingFrom) {
         applyEntityPosition(state);
+        updateEntityLabel(entity.id, state);
       }
-      updateEntityLabel(entity.id, state);
     }
   }
 
@@ -770,9 +770,6 @@
     void viewport;
 
     if (!viewport) return;
-    if (lastSyncedEntities !== entities) {
-      syncEntityVisualStates(entities);
-    }
 
     refreshEntityBaseVisuals();
   });
@@ -892,26 +889,16 @@
 
     if (!tooltipVisible) return;
 
-    let retries = 2;
-    const schedulePosition = (): void => {
+    tooltipFrameId = requestAnimationFrame(() => {
       if (!tooltipVisible) {
         tooltipFrameId = 0;
         return;
       }
 
-      const { width, height } = updateTooltipMeasurements();
-
-      if (width === 0 && height === 0 && retries > 0) {
-        retries -= 1;
-        tooltipFrameId = requestAnimationFrame(schedulePosition);
-        return;
-      }
-
+      updateTooltipMeasurements();
       setTooltipPosition(tooltipAnchorX, tooltipAnchorY);
       tooltipFrameId = 0;
-    };
-
-    tooltipFrameId = requestAnimationFrame(schedulePosition);
+    });
   });
 </script>
 
