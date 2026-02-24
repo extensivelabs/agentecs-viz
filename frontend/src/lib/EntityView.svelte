@@ -6,7 +6,8 @@
   import { getArchetypeColor, getArchetypeColorCSS } from "./colors";
   import { getArchetypeKey, getArchetypeDisplay } from "./utils";
   import { computeLayout, PIPELINE_HEADER_Y } from "./layout";
-  import type { LayoutMode, LayoutResult, ColumnInfo, EntityPosition } from "./layout";
+  import type { LayoutMode, ColumnInfo, EntityPosition } from "./layout";
+  import type { EntitySnapshot } from "./types";
   import {
     WORLD_SIZE,
     BACKGROUND_COLOR,
@@ -25,7 +26,19 @@
 
   type ViewLevel = "detail" | "overview" | "auto";
 
+  type EntityVisualState = {
+    graphics: Graphics;
+    hitRadius: number;
+    label: Text | null;
+    badge: Text | null;
+    tooltip: string;
+    position: EntityPosition | null;
+    radius: number;
+    fillColor: number;
+  };
+
   let containerEl: HTMLDivElement;
+  let tooltipEl: HTMLDivElement | null = $state(null);
   let app: Application | null = null;
   let viewport: Viewport | null = $state(null);
 
@@ -33,36 +46,40 @@
   let currentViewLevel: "detail" | "overview" = $state("detail");
   let layoutMode: LayoutMode = $state("spatial");
 
-  // Entity graphics cache
-  let entityGraphics = new Map<number, Graphics>();
-  let entityHitRadii = new Map<number, number>();
-  let entityLabels = new Map<number, Text>();
-  let entityBadges = new Map<number, Text>();
-  let lastLayoutTick = -1;
+  let entityVisualStates = new Map<number, EntityVisualState>();
+  let lastLayoutEntities: EntitySnapshot[] | null = null;
   let lastLayoutMode: LayoutMode = "spatial";
-  let cachedLayoutResult: LayoutResult = { positions: new Map(), columns: [] };
-  let cachedLayout = new Map<number, EntityPosition>();
+  let cachedColumns: ColumnInfo[] = [];
 
-  // Animation
   let animatingFrom: Map<number, EntityPosition> | null = null;
   let animationStart = 0;
   const ANIM_DURATION_MS = 300;
   let animFrameId = 0;
 
-  // Column headers (screen-space, updated on viewport change)
   let columnHeaders: { name: string; screenX: number; screenY: number; count: number }[] = $state([]);
 
-  // Entity tooltip cache
-  let entityTooltips = new Map<number, string>();
-
-  // Tooltip state
   let tooltipText: string = $state("");
   let tooltipX: number = $state(0);
   let tooltipY: number = $state(0);
   let tooltipVisible: boolean = $state(false);
   let hoveredEntityId: number | null = null;
+  let tooltipAnchorX = 0;
+  let tooltipAnchorY = 0;
 
-  // Archetype legend
+  let filterActive = false;
+  let filterMatches = new Set<number>();
+
+  let visualSelectedEntityId: number | null = null;
+  let visualChangedEntityIds = new Set<number>();
+  let visualErrorEntityIds = new Set<number>();
+  let visualPastErrorEntityIds = new Set<number>();
+  let visualChangedEntityIdsSource: Set<number> | null = null;
+  let visualErrorEntityIdsSource: Set<number> | null = null;
+  let visualPastErrorEntityIdsSource: Set<number> | null = null;
+
+  let badgeDiffCounts = new Map<number, number>();
+  let previousBadgeDetail = true;
+
   let archetypeCounts: { key: string; display: string; color: string; count: number }[] = $derived.by(() => {
     const counts = new Map<string, { display: string; archetype: string[]; count: number }>();
     for (const entity of world.entities) {
@@ -90,20 +107,50 @@
 
   let initialFitDone = false;
 
+  function addIfPresent(target: Set<number>, value: number | null): void {
+    if (value !== null) {
+      target.add(value);
+    }
+  }
+
+  function unionInto(target: Set<number>, source: Iterable<number>): void {
+    for (const id of source) {
+      target.add(id);
+    }
+  }
+
+  function hasPositionedEntities(): boolean {
+    for (const state of entityVisualStates.values()) {
+      if (state.position) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   function fitToEntities() {
     if (!viewport) return;
-    const layout = cachedLayout;
-    if (layout.size === 0) {
+
+    let hasEntities = false;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const state of entityVisualStates.values()) {
+      if (!state.position) continue;
+      hasEntities = true;
+      if (state.position.x < minX) minX = state.position.x;
+      if (state.position.y < minY) minY = state.position.y;
+      if (state.position.x > maxX) maxX = state.position.x;
+      if (state.position.y > maxY) maxY = state.position.y;
+    }
+
+    if (!hasEntities) {
       viewport.fitWorld(true);
       return;
     }
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const pos of layout.values()) {
-      if (pos.x < minX) minX = pos.x;
-      if (pos.y < minY) minY = pos.y;
-      if (pos.x > maxX) maxX = pos.x;
-      if (pos.y > maxY) maxY = pos.y;
-    }
+
     const bw = maxX - minX + VIEWPORT_FIT_PADDING * 2;
     const bh = maxY - minY + VIEWPORT_FIT_PADDING * 2;
     const cx = (minX + maxX) / 2;
@@ -126,46 +173,339 @@
     return world.config?.field_hints?.status_fields ?? ["status", "state", "phase"];
   }
 
-  function cancelAnimation() {
-    if (animFrameId) {
-      cancelAnimationFrame(animFrameId);
-      animFrameId = 0;
+  function shouldShowLabels(): boolean {
+    return (
+      viewport !== null
+      && currentViewLevel === "detail"
+      && viewport.scaled >= LABEL_ZOOM_THRESHOLD
+      && animatingFrom === null
+    );
+  }
+
+  function shouldShowBadges(): boolean {
+    return currentViewLevel === "detail" && animatingFrom === null;
+  }
+
+  function setTooltipPosition(rawX: number, rawY: number): void {
+    tooltipAnchorX = rawX;
+    tooltipAnchorY = rawY;
+
+    const tooltipWidth = tooltipEl?.offsetWidth ?? 220;
+    const tooltipHeight = tooltipEl?.offsetHeight ?? 44;
+    const maxX = Math.max(4, containerEl.clientWidth - tooltipWidth - 4);
+    const maxY = Math.max(4, containerEl.clientHeight - tooltipHeight - 4);
+
+    tooltipX = Math.min(Math.max(4, rawX), maxX);
+    tooltipY = Math.min(Math.max(4, rawY), maxY);
+  }
+
+  function createEntityVisualState(entityId: number): EntityVisualState {
+    const graphics = new Graphics();
+    graphics.eventMode = "static";
+    graphics.cursor = "pointer";
+
+    const state: EntityVisualState = {
+      graphics,
+      hitRadius: MIN_HIT_RADIUS,
+      label: null,
+      badge: null,
+      tooltip: `Entity ${entityId}`,
+      position: null,
+      radius: OVERVIEW_DOT_RADIUS,
+      fillColor: 0xffffff,
+    };
+
+    graphics.on("pointertap", () => {
+      if (world.selectedEntityId === entityId) {
+        world.selectEntity(null);
+      } else {
+        world.selectEntity(entityId);
+      }
+    });
+
+    graphics.on("pointerover", (event) => {
+      tooltipText = state.tooltip;
+      const global = event.global;
+      setTooltipPosition(global.x + 12, global.y - 8);
+      tooltipVisible = true;
+      hoveredEntityId = entityId;
+    });
+
+    graphics.on("pointermove", (event) => {
+      if (hoveredEntityId !== entityId) return;
+      const global = event.global;
+      setTooltipPosition(global.x + 12, global.y - 8);
+    });
+
+    graphics.on("pointerout", () => {
+      tooltipVisible = false;
+      hoveredEntityId = null;
+    });
+
+    viewport?.addChild(graphics);
+
+    return state;
+  }
+
+  function destroyEntityVisualState(entityId: number, state: EntityVisualState): void {
+    if (hoveredEntityId === entityId) {
+      tooltipVisible = false;
+      hoveredEntityId = null;
     }
-    animatingFrom = null;
+
+    state.graphics.destroy();
+    state.label?.destroy();
+    state.badge?.destroy();
+
+    entityVisualStates.delete(entityId);
+    visualChangedEntityIds.delete(entityId);
+    visualErrorEntityIds.delete(entityId);
+    visualPastErrorEntityIds.delete(entityId);
+    filterMatches.delete(entityId);
+    badgeDiffCounts.delete(entityId);
+  }
+
+  function syncEntityVisualStates(entities: EntitySnapshot[]): void {
+    const activeIds = new Set<number>();
+
+    for (const entity of entities) {
+      activeIds.add(entity.id);
+      if (!entityVisualStates.has(entity.id)) {
+        entityVisualStates.set(entity.id, createEntityVisualState(entity.id));
+      }
+    }
+
+    for (const [id, state] of entityVisualStates) {
+      if (!activeIds.has(id)) {
+        destroyEntityVisualState(id, state);
+      }
+    }
+  }
+
+  function applyEntityPosition(state: EntityVisualState): void {
+    if (!state.position) return;
+
+    state.graphics.position.set(state.position.x, state.position.y);
+
+    if (state.label) {
+      state.label.position.set(state.position.x, state.position.y - state.radius - 2);
+    }
+    if (state.badge) {
+      state.badge.position.set(state.position.x + state.radius + 6, state.position.y - state.radius - 4);
+    }
+  }
+
+  function drawEntityRings(entityId: number, state: EntityVisualState): void {
+    const hasSelection = visualSelectedEntityId === entityId;
+    const hasChanged = visualChangedEntityIds.has(entityId);
+    const hasError = visualErrorEntityIds.has(entityId);
+    const hasPastError = visualPastErrorEntityIds.has(entityId);
+
+    if (hasSelection) {
+      state.graphics.circle(0, 0, state.radius + 3).stroke({ color: SELECTION_RING_COLOR, width: 2 });
+    }
+
+    if (hasChanged) {
+      state.graphics.circle(0, 0, state.radius + (hasSelection ? 6 : 3)).stroke({ color: CHANGED_RING_COLOR, width: 1.5 });
+    }
+
+    if (hasError) {
+      const errorOffset = hasSelection && hasChanged ? 9 : hasSelection || hasChanged ? 6 : 3;
+      state.graphics.circle(0, 0, state.radius + errorOffset).stroke({ color: ERROR_RING_COLOR, width: 2 });
+      return;
+    }
+
+    if (hasPastError) {
+      const errorOffset = hasSelection && hasChanged ? 9 : hasSelection || hasChanged ? 6 : 3;
+      state.graphics.circle(0, 0, state.radius + errorOffset).stroke({ color: 0x666666, width: 1 });
+    }
+  }
+
+  function redrawEntityVisual(entityId: number): void {
+    const state = entityVisualStates.get(entityId);
+    if (!state) return;
+
+    state.graphics.clear();
+    state.graphics.circle(0, 0, state.radius).fill({ color: state.fillColor });
+    drawEntityRings(entityId, state);
+  }
+
+  function applyEntityAlpha(entityId: number, state: EntityVisualState): void {
+    const dimmed = filterActive && !filterMatches.has(entityId);
+    const alpha = dimmed ? 0.15 : 1;
+
+    state.graphics.alpha = alpha;
+    if (state.label) state.label.alpha = alpha;
+    if (state.badge) state.badge.alpha = alpha;
+  }
+
+  function updateEntityLabel(entityId: number, state: EntityVisualState): void {
+    if (!shouldShowLabels() || !state.position) {
+      if (state.label) {
+        state.label.visible = false;
+      }
+      return;
+    }
+
+    if (!state.label) {
+      state.label = new Text({
+        text: `${entityId}`,
+        style: new TextStyle({
+          fontSize: 12,
+          fill: 0xcccccc,
+          fontFamily: "monospace",
+        }),
+      });
+      state.label.anchor.set(0.5, -0.5);
+      viewport?.addChild(state.label);
+    }
+
+    state.label.position.set(state.position.x, state.position.y - state.radius - 2);
+    state.label.visible = true;
+    state.label.alpha = state.graphics.alpha;
+  }
+
+  function updateEntityBadge(entityId: number, state: EntityVisualState): void {
+    const diffCount = badgeDiffCounts.get(entityId);
+    const position = state.position;
+    const shouldShow = shouldShowBadges() && position !== null && typeof diffCount === "number" && diffCount > 0;
+
+    if (!shouldShow) {
+      if (state.badge) {
+        state.badge.visible = false;
+      }
+      return;
+    }
+
+    if (!state.badge) {
+      state.badge = new Text({
+        text: "",
+        style: new TextStyle({
+          fontSize: 10,
+          fill: CHANGED_RING_COLOR,
+          fontFamily: "monospace",
+        }),
+      });
+      state.badge.anchor.set(0, 1);
+      viewport?.addChild(state.badge);
+    }
+
+    state.badge.text = `${diffCount}`;
+    state.badge.position.set(position.x + state.radius + 6, position.y - state.radius - 4);
+    state.badge.visible = true;
+    state.badge.alpha = state.graphics.alpha;
+  }
+
+  function updateAllLabels(): void {
+    for (const [id, state] of entityVisualStates) {
+      updateEntityLabel(id, state);
+    }
+  }
+
+  function updateAllBadges(): void {
+    for (const [id, state] of entityVisualStates) {
+      updateEntityBadge(id, state);
+    }
+  }
+
+  function refreshEntityBaseVisuals(): void {
+    const entities = world.entities;
+    const isDetail = currentViewLevel === "detail";
+    const maxR = adaptiveMaxRadius(entities.length);
+
+    for (const entity of entities) {
+      const state = entityVisualStates.get(entity.id);
+      if (!state) continue;
+
+      state.fillColor = getArchetypeColor(entity.archetype);
+      state.radius = isDetail ? entityRadius(entity.components.length, maxR) : OVERVIEW_DOT_RADIUS;
+      state.tooltip = `Entity ${entity.id}\n${getArchetypeDisplay(entity.archetype)}`;
+
+      const hitRadius = Math.max(state.radius, MIN_HIT_RADIUS);
+      if (state.hitRadius !== hitRadius) {
+        state.hitRadius = hitRadius;
+        state.graphics.hitArea = new Circle(0, 0, hitRadius);
+      }
+
+      redrawEntityVisual(entity.id);
+      if (!animatingFrom) {
+        applyEntityPosition(state);
+      }
+      applyEntityAlpha(entity.id, state);
+      updateEntityLabel(entity.id, state);
+      updateEntityBadge(entity.id, state);
+    }
   }
 
   function recomputeLayout() {
-    const tick = world.tick;
+    if (!viewport) return;
+
+    const entities = world.entities;
     const mode = layoutMode;
-    const needsRecompute = tick !== lastLayoutTick || mode !== lastLayoutMode;
+    const needsRecompute = entities !== lastLayoutEntities || mode !== lastLayoutMode;
     if (!needsRecompute) return;
 
-    const prevPositions = cachedLayout;
-    const modeChanged = mode !== lastLayoutMode && prevPositions.size > 0;
-    const tickChanged = tick !== lastLayoutTick;
+    const prevPositions = new Map<number, EntityPosition>();
+    for (const [id, state] of entityVisualStates) {
+      if (state.position) {
+        prevPositions.set(id, state.position);
+      }
+    }
 
-    // Cancel in-progress animation if tick changes mid-flight
-    if (tickChanged && animatingFrom) {
+    const modeChanged = mode !== lastLayoutMode && prevPositions.size > 0;
+    if (entities !== lastLayoutEntities && animatingFrom) {
       cancelAnimation();
     }
 
-    cachedLayoutResult = computeLayout(world.entities, mode, getStatusFields());
-    cachedLayout = cachedLayoutResult.positions;
-    lastLayoutTick = tick;
-    lastLayoutMode = mode;
+    const nextLayout = computeLayout(entities, mode, getStatusFields());
+    cachedColumns = nextLayout.columns;
 
-    if (modeChanged) {
-      animatingFrom = new Map(prevPositions);
-      animationStart = performance.now();
-      startAnimation();
+    for (const state of entityVisualStates.values()) {
+      state.position = null;
     }
 
+    for (const entity of entities) {
+      const state = entityVisualStates.get(entity.id);
+      if (!state) continue;
+      state.position = nextLayout.positions.get(entity.id) ?? null;
+      if (!modeChanged && !animatingFrom) {
+        applyEntityPosition(state);
+      }
+    }
+
+    lastLayoutEntities = entities;
+    lastLayoutMode = mode;
     updateColumnHeaders();
+
+    if (modeChanged) {
+      animatingFrom = prevPositions;
+      animationStart = performance.now();
+      updateAllLabels();
+      updateAllBadges();
+      startAnimation();
+      return;
+    }
+
+    animatingFrom = null;
+    updateAllLabels();
+    updateAllBadges();
+
+    if (!initialFitDone && hasPositionedEntities()) {
+      initialFitDone = true;
+      fitToEntities();
+      updateViewLevel();
+    }
   }
 
   function startAnimation() {
     if (animFrameId) cancelAnimationFrame(animFrameId);
+
     function tick() {
+      if (!animatingFrom) {
+        animFrameId = 0;
+        return;
+      }
+
       const progress = Math.min(1, (performance.now() - animationStart) / ANIM_DURATION_MS);
       applyAnimatedPositions(progress);
       if (progress < 1) {
@@ -173,8 +513,14 @@
       } else {
         animatingFrom = null;
         animFrameId = 0;
+        for (const state of entityVisualStates.values()) {
+          applyEntityPosition(state);
+        }
+        updateAllLabels();
+        updateAllBadges();
       }
     }
+
     animFrameId = requestAnimationFrame(tick);
   }
 
@@ -184,27 +530,40 @@
 
   function applyAnimatedPositions(rawProgress: number) {
     if (!viewport || !animatingFrom) return;
+
     const progress = easeOutCubic(rawProgress);
-    for (const [id, gfx] of entityGraphics) {
+    for (const [id, state] of entityVisualStates) {
       const from = animatingFrom.get(id);
-      const to = cachedLayout.get(id);
+      const to = state.position;
       if (!to) continue;
+
       if (from) {
         const x = from.x + (to.x - from.x) * progress;
         const y = from.y + (to.y - from.y) * progress;
-        gfx.position.set(x, y);
+        state.graphics.position.set(x, y);
       } else {
-        gfx.position.set(to.x, to.y);
+        state.graphics.position.set(to.x, to.y);
       }
     }
   }
 
+  function cancelAnimation() {
+    if (animFrameId) {
+      cancelAnimationFrame(animFrameId);
+      animFrameId = 0;
+    }
+    animatingFrom = null;
+    updateAllLabels();
+    updateAllBadges();
+  }
+
   function updateColumnHeaders() {
-    if (!viewport || layoutMode !== "pipeline" || cachedLayoutResult.columns.length === 0) {
+    if (!viewport || layoutMode !== "pipeline" || cachedColumns.length === 0) {
       columnHeaders = [];
       return;
     }
-    columnHeaders = cachedLayoutResult.columns.map(col => {
+
+    columnHeaders = cachedColumns.map((col) => {
       const screen = viewport!.toScreen(col.x, PIPELINE_HEADER_Y);
       return { name: col.name, screenX: screen.x, screenY: screen.y, count: col.count };
     });
@@ -213,197 +572,33 @@
   function setLayoutMode(mode: LayoutMode) {
     if (mode === layoutMode) return;
     layoutMode = mode;
-    lastLayoutTick = -1;
-  }
-
-  function renderEntities() {
-    if (!viewport || !app) return;
-
-    recomputeLayout();
-
-    const entities = world.entities;
-    const layout = cachedLayout;
-    const isDetail = currentViewLevel === "detail";
-    const selectedId = world.selectedEntityId;
-    const showLabels = isDetail && viewport.scaled >= LABEL_ZOOM_THRESHOLD;
-    const maxR = adaptiveMaxRadius(entities.length);
-    const filtering = world.hasActiveFilter;
-    const matchIds = world.matchingEntityIds;
-
-    const activeIds = new Set<number>();
-
-    for (const entity of entities) {
-      activeIds.add(entity.id);
-      const pos = layout.get(entity.id);
-      if (!pos) continue;
-
-      const color = getArchetypeColor(entity.archetype);
-      const radius = isDetail ? entityRadius(entity.components.length, maxR) : OVERVIEW_DOT_RADIUS;
-
-      let gfx = entityGraphics.get(entity.id);
-      if (!gfx) {
-        gfx = new Graphics();
-        gfx.eventMode = "static";
-        gfx.cursor = "pointer";
-
-        const entityId = entity.id;
-
-        gfx.on("pointertap", () => {
-          if (world.selectedEntityId === entityId) {
-            world.selectEntity(null);
-          } else {
-            world.selectEntity(entityId);
-          }
-        });
-
-        gfx.on("pointerover", (e) => {
-          tooltipText = entityTooltips.get(entityId) ?? `Entity ${entityId}`;
-          const global = e.global;
-          tooltipX = global.x + 12;
-          tooltipY = global.y - 8;
-          tooltipVisible = true;
-          hoveredEntityId = entityId;
-        });
-
-        gfx.on("pointerout", () => {
-          tooltipVisible = false;
-          hoveredEntityId = null;
-        });
-
-        viewport.addChild(gfx);
-        entityGraphics.set(entity.id, gfx);
-      }
-
-      gfx.clear();
-      gfx.circle(0, 0, radius).fill({ color });
-
-      if (selectedId === entity.id) {
-        gfx.circle(0, 0, radius + 3).stroke({ color: SELECTION_RING_COLOR, width: 2 });
-      }
-
-      if (world.changedEntityIds.has(entity.id)) {
-        gfx.circle(0, 0, radius + (selectedId === entity.id ? 6 : 3)).stroke({ color: CHANGED_RING_COLOR, width: 1.5 });
-      }
-
-      if (world.errorEntityIds.has(entity.id)) {
-        const hasSelection = selectedId === entity.id;
-        const hasChanged = world.changedEntityIds.has(entity.id);
-        const errorOffset = hasSelection && hasChanged ? 9 : hasSelection || hasChanged ? 6 : 3;
-        gfx.circle(0, 0, radius + errorOffset).stroke({ color: ERROR_RING_COLOR, width: 2 });
-      } else if (world.pastErrorEntityIds.has(entity.id)) {
-        const hasSelection = selectedId === entity.id;
-        const hasChanged = world.changedEntityIds.has(entity.id);
-        const errorOffset = hasSelection && hasChanged ? 9 : hasSelection || hasChanged ? 6 : 3;
-        gfx.circle(0, 0, radius + errorOffset).stroke({ color: 0x666666, width: 1 });
-      }
-
-      // Only set position directly if not animating
-      if (!animatingFrom) {
-        gfx.position.set(pos.x, pos.y);
-      }
-
-      entityTooltips.set(entity.id, `Entity ${entity.id}\n${getArchetypeDisplay(entity.archetype)}`);
-      const hitRadius = Math.max(radius, MIN_HIT_RADIUS);
-      if (entityHitRadii.get(entity.id) !== hitRadius) {
-        gfx.hitArea = new Circle(0, 0, hitRadius);
-        entityHitRadii.set(entity.id, hitRadius);
-      }
-
-      const dimmed = filtering && !matchIds.has(entity.id);
-      gfx.alpha = dimmed ? 0.15 : 1;
-
-      // Labels
-      if (showLabels && !animatingFrom) {
-        let label = entityLabels.get(entity.id);
-        if (!label) {
-          label = new Text({
-            text: `${entity.id}`,
-            style: new TextStyle({
-              fontSize: 12,
-              fill: 0xcccccc,
-              fontFamily: "monospace",
-            }),
-          });
-          label.anchor.set(0.5, -0.5);
-          viewport.addChild(label);
-          entityLabels.set(entity.id, label);
-        }
-        label.position.set(pos.x, pos.y - radius - 2);
-        label.visible = true;
-        label.alpha = dimmed ? 0.15 : 1;
-      } else {
-        const label = entityLabels.get(entity.id);
-        if (label) label.visible = false;
-      }
-
-      // Diff badges
-      const diffCount = isDetail && !animatingFrom ? world.entityDiffCounts.get(entity.id) : undefined;
-      if (diffCount) {
-        let badge = entityBadges.get(entity.id);
-        if (!badge) {
-          badge = new Text({
-            text: "",
-            style: new TextStyle({
-              fontSize: 10,
-              fill: CHANGED_RING_COLOR,
-              fontFamily: "monospace",
-            }),
-          });
-          badge.anchor.set(0, 1);
-          viewport.addChild(badge);
-          entityBadges.set(entity.id, badge);
-        }
-        badge.text = `${diffCount}`;
-        badge.position.set(pos.x + radius + 6, pos.y - radius - 4);
-        badge.visible = true;
-        badge.alpha = dimmed ? 0.15 : 1;
-      } else {
-        const badge = entityBadges.get(entity.id);
-        if (badge) badge.visible = false;
-      }
-    }
-
-    // Remove stale graphics
-    for (const [id, gfx] of entityGraphics) {
-      if (!activeIds.has(id)) {
-        if (hoveredEntityId === id) {
-          tooltipVisible = false;
-          hoveredEntityId = null;
-        }
-        gfx.destroy();
-        entityGraphics.delete(id);
-        entityHitRadii.delete(id);
-        entityTooltips.delete(id);
-        const label = entityLabels.get(id);
-        if (label) {
-          label.destroy();
-          entityLabels.delete(id);
-        }
-        const badge = entityBadges.get(id);
-        if (badge) {
-          badge.destroy();
-          entityBadges.delete(id);
-        }
-      }
-    }
+    lastLayoutEntities = null;
   }
 
   onMount(() => {
     let destroyed = false;
-
     let initFailed = false;
 
     async function init() {
-      entityGraphics = new Map();
-      entityHitRadii = new Map();
-      entityLabels = new Map();
-      entityBadges = new Map();
-      entityTooltips = new Map();
-      cachedLayout = new Map();
-      cachedLayoutResult = { positions: new Map(), columns: [] };
-      lastLayoutTick = -1;
+      entityVisualStates = new Map<number, EntityVisualState>();
+      cachedColumns = [];
+      lastLayoutEntities = null;
       lastLayoutMode = "spatial";
       initialFitDone = false;
+
+      filterActive = false;
+      filterMatches = new Set<number>();
+
+      visualSelectedEntityId = null;
+      visualChangedEntityIds = new Set<number>();
+      visualErrorEntityIds = new Set<number>();
+      visualPastErrorEntityIds = new Set<number>();
+      visualChangedEntityIdsSource = null;
+      visualErrorEntityIdsSource = null;
+      visualPastErrorEntityIdsSource = null;
+
+      badgeDiffCounts = new Map<number, number>();
+      previousBadgeDetail = true;
 
       try {
         app = new Application();
@@ -414,7 +609,8 @@
           autoDensity: true,
           resizeTo: containerEl,
         });
-      } catch {
+      } catch (error) {
+        console.warn("[EntityView] Pixi init failed", error);
         initFailed = true;
         app = null;
         return;
@@ -444,11 +640,16 @@
         .clampZoom({ minScale: 0.15, maxScale: 5 });
 
       app.stage.addChild(viewport);
-
       viewport.fitWorld(true);
 
-      viewport.on("zoomed", () => { updateViewLevel(); updateColumnHeaders(); });
-      viewport.on("moved", () => { updateViewLevel(); updateColumnHeaders(); });
+      const onViewportChanged = () => {
+        updateViewLevel();
+        updateColumnHeaders();
+        updateAllLabels();
+      };
+
+      viewport.on("zoomed", onViewportChanged);
+      viewport.on("moved", onViewportChanged);
 
       updateViewLevel();
     }
@@ -456,9 +657,12 @@
     init();
 
     const resizeObserver = new ResizeObserver(() => {
-      if (viewport && containerEl) {
+      if (viewport) {
         viewport.resize(containerEl.clientWidth, containerEl.clientHeight);
         updateColumnHeaders();
+        if (tooltipVisible) {
+          setTooltipPosition(tooltipAnchorX, tooltipAnchorY);
+        }
       }
     });
     resizeObserver.observe(containerEl);
@@ -475,14 +679,20 @@
       cancelAnimation();
       window.removeEventListener("keydown", onKeyDown);
       resizeObserver.disconnect();
-      entityGraphics.clear();
-      entityHitRadii.clear();
-      entityLabels.clear();
-      entityBadges.clear();
-      entityTooltips.clear();
+
+      entityVisualStates.clear();
+      hoveredEntityId = null;
+      tooltipVisible = false;
+      tooltipEl = null;
+
       if (app && !initFailed) {
-        try { app.destroy(true); } catch { /* renderer may not exist */ }
+        try {
+          app.destroy(true);
+        } catch (error) {
+          console.warn("[EntityView] Pixi cleanup failed", error);
+        }
       }
+
       app = null;
       viewport = null;
     };
@@ -490,30 +700,131 @@
 
   $effect(() => {
     void world.entities;
-    void world.selectedEntityId;
-    void world.changedEntityIds;
-    void world.entityDiffCounts;
-    void world.errorEntityIds;
-    void world.pastErrorEntityIds;
-    void world.hasActiveFilter;
-    void world.matchingEntityIds;
-    void currentViewLevel;
     void layoutMode;
+    void viewport;
 
-    renderEntities();
+    if (!viewport) return;
 
-    if (!initialFitDone && cachedLayout.size > 0 && viewport) {
-      initialFitDone = true;
-      fitToEntities();
-      updateViewLevel();
+    syncEntityVisualStates(world.entities);
+    recomputeLayout();
+  });
+
+  $effect(() => {
+    void world.entities;
+    void currentViewLevel;
+    void viewport;
+
+    if (!viewport) return;
+
+    syncEntityVisualStates(world.entities);
+    refreshEntityBaseVisuals();
+  });
+
+  $effect(() => {
+    const selectedEntityId = world.selectedEntityId;
+    const changedEntityIds = world.changedEntityIds;
+    const errorEntityIds = world.errorEntityIds;
+    const pastErrorEntityIds = world.pastErrorEntityIds;
+
+    const affected = new Set<number>();
+
+    if (selectedEntityId !== visualSelectedEntityId) {
+      addIfPresent(affected, visualSelectedEntityId);
+      addIfPresent(affected, selectedEntityId);
     }
+
+    if (changedEntityIds !== visualChangedEntityIdsSource) {
+      unionInto(affected, visualChangedEntityIds);
+      unionInto(affected, changedEntityIds);
+      visualChangedEntityIds = new Set<number>(changedEntityIds);
+      visualChangedEntityIdsSource = changedEntityIds;
+    }
+
+    if (errorEntityIds !== visualErrorEntityIdsSource) {
+      unionInto(affected, visualErrorEntityIds);
+      unionInto(affected, errorEntityIds);
+      visualErrorEntityIds = new Set<number>(errorEntityIds);
+      visualErrorEntityIdsSource = errorEntityIds;
+    }
+
+    if (pastErrorEntityIds !== visualPastErrorEntityIdsSource) {
+      unionInto(affected, visualPastErrorEntityIds);
+      unionInto(affected, pastErrorEntityIds);
+      visualPastErrorEntityIds = new Set<number>(pastErrorEntityIds);
+      visualPastErrorEntityIdsSource = pastErrorEntityIds;
+    }
+
+    visualSelectedEntityId = selectedEntityId;
+
+    for (const id of affected) {
+      redrawEntityVisual(id);
+    }
+  });
+
+  $effect(() => {
+    const hasActiveFilter = world.hasActiveFilter;
+    const matchingEntityIds = world.matchingEntityIds;
+
+    const affected = new Set<number>();
+    if (hasActiveFilter !== filterActive) {
+      for (const id of entityVisualStates.keys()) {
+        affected.add(id);
+      }
+    } else {
+      unionInto(affected, filterMatches);
+      unionInto(affected, matchingEntityIds);
+    }
+
+    filterActive = hasActiveFilter;
+    filterMatches = new Set<number>(matchingEntityIds);
+
+    for (const id of affected) {
+      const state = entityVisualStates.get(id);
+      if (!state) continue;
+      applyEntityAlpha(id, state);
+    }
+  });
+
+  $effect(() => {
+    const nextDiffCounts = world.entityDiffCounts;
+    const isDetail = currentViewLevel === "detail";
+
+    const affected = new Set<number>();
+    if (isDetail !== previousBadgeDetail) {
+      for (const id of entityVisualStates.keys()) {
+        affected.add(id);
+      }
+    } else {
+      unionInto(affected, badgeDiffCounts.keys());
+      unionInto(affected, nextDiffCounts.keys());
+    }
+
+    badgeDiffCounts = new Map<number, number>(nextDiffCounts);
+    previousBadgeDetail = isDetail;
+
+    for (const id of affected) {
+      const state = entityVisualStates.get(id);
+      if (!state) continue;
+      updateEntityBadge(id, state);
+    }
+  });
+
+  $effect(() => {
+    void tooltipVisible;
+    void tooltipText;
+
+    if (!tooltipVisible) return;
+
+    queueMicrotask(() => {
+      if (!tooltipVisible) return;
+      setTooltipPosition(tooltipAnchorX, tooltipAnchorY);
+    });
   });
 </script>
 
 <div class="relative h-full w-full" data-testid="entity-view">
   <div bind:this={containerEl} class="h-full w-full"></div>
 
-  <!-- Layout mode + view level toggle -->
   <div class="absolute right-3 top-3 flex items-center gap-3 text-sm">
     <div class="flex items-center gap-1 rounded bg-bg-secondary/90 px-2.5 py-1.5" data-testid="layout-mode-toggle">
       {#each (["spatial", "pipeline"] as const) as mode}
@@ -546,7 +857,6 @@
     </div>
   </div>
 
-  <!-- Pipeline column headers -->
   {#if layoutMode === "pipeline" && columnHeaders.length > 0}
     <div class="pointer-events-none absolute inset-0 overflow-hidden" data-testid="pipeline-columns">
       {#each columnHeaders as col (col.name)}
@@ -564,7 +874,6 @@
     </div>
   {/if}
 
-  <!-- Archetype legend -->
   {#if archetypeCounts.length > 0}
     <div class="absolute bottom-3 left-3 max-h-48 overflow-y-auto rounded bg-bg-secondary/90 px-3 py-2 text-sm">
       {#each archetypeCounts as { display, color, count }}
@@ -580,7 +889,6 @@
     </div>
   {/if}
 
-  <!-- Zoom controls -->
   <div class="absolute bottom-3 right-3 flex flex-col gap-1">
     <button
       class="flex h-8 w-8 items-center justify-center rounded bg-bg-secondary/90 text-base text-text-secondary hover:text-text-primary"
@@ -602,9 +910,9 @@
     >&#8962;</button>
   </div>
 
-  <!-- Tooltip -->
   {#if tooltipVisible}
     <div
+      bind:this={tooltipEl}
       class="pointer-events-none absolute z-50 whitespace-pre rounded bg-bg-secondary px-3 py-1.5 text-sm text-text-primary shadow-lg"
       style:left={tooltipX + "px"}
       style:top={tooltipY + "px"}
