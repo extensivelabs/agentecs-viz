@@ -70,6 +70,7 @@
 
   let filterActive = false;
   let filterMatches = new Set<number>();
+  let filterEntitiesSource: EntitySnapshot[] | null = null;
 
   let visualSelectedEntityId: number | null = null;
   let visualChangedEntityIds = new Set<number>();
@@ -435,9 +436,7 @@
       if (!animatingFrom) {
         applyEntityPosition(state);
       }
-      applyEntityAlpha(entity.id, state);
       updateEntityLabel(entity.id, state);
-      updateEntityBadge(entity.id, state);
     }
   }
 
@@ -593,6 +592,7 @@
 
       filterActive = false;
       filterMatches = new Set<number>();
+      filterEntitiesSource = null;
 
       visualSelectedEntityId = null;
       visualChangedEntityIds = new Set<number>();
@@ -651,6 +651,7 @@
         updateViewLevel();
         updateColumnHeaders();
         updateAllLabels();
+        updateAllBadges();
       };
 
       viewport.on("zoomed", onViewportChanged);
@@ -695,6 +696,7 @@
 
       entityVisualStates = new Map<number, EntityVisualState>();
       lastSyncedEntities = null;
+      filterEntitiesSource = null;
       hoveredEntityId = null;
       tooltipVisible = false;
       tooltipEl = null;
@@ -782,13 +784,19 @@
   });
 
   $effect(() => {
+    const entities = world.entities;
     const hasActiveFilter = world.hasActiveFilter;
     const matchingEntityIds = world.matchingEntityIds;
 
     if (!viewport) return;
 
     const affected = new Set<number>();
-    if (hasActiveFilter !== filterActive) {
+    const entitiesChanged = entities !== filterEntitiesSource;
+
+    if (
+      hasActiveFilter !== filterActive
+      || (entitiesChanged && (hasActiveFilter || filterActive))
+    ) {
       for (const id of entityVisualStates.keys()) {
         affected.add(id);
       }
@@ -799,6 +807,7 @@
 
     filterActive = hasActiveFilter;
     filterMatches = new Set<number>(matchingEntityIds);
+    filterEntitiesSource = entities;
 
     for (const id of affected) {
       const state = entityVisualStates.get(id);
@@ -836,6 +845,8 @@
   $effect(() => {
     void tooltipVisible;
     void tooltipText;
+    // Pointer handlers call setTooltipPosition directly while tooltip is visible.
+    // This effect handles first paint and tooltip text size changes.
 
     if (tooltipFrameId) {
       cancelAnimationFrame(tooltipFrameId);
