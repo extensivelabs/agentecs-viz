@@ -571,6 +571,7 @@ export class WorldState {
         console.warn(
           "[world] delta message received but not yet implemented; requesting snapshot resync",
         );
+        // seek() also pauses playback; resync is preferred to running with stale state.
         this.client?.seek(msg.tick);
         break;
     }
