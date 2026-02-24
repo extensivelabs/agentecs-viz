@@ -48,6 +48,7 @@
 
   let entityVisualStates = new Map<number, EntityVisualState>();
   let lastLayoutEntities: EntitySnapshot[] | null = null;
+  let lastSyncedEntities: EntitySnapshot[] | null = null;
   let lastLayoutMode: LayoutMode = "spatial";
   let cachedColumns: ColumnInfo[] = [];
 
@@ -55,6 +56,7 @@
   let animationStart = 0;
   const ANIM_DURATION_MS = 300;
   let animFrameId = 0;
+  let tooltipFrameId = 0;
 
   let columnHeaders: { name: string; screenX: number; screenY: number; count: number }[] = $state([]);
 
@@ -280,6 +282,8 @@
         destroyEntityVisualState(id, state);
       }
     }
+
+    lastSyncedEntities = entities;
   }
 
   function applyEntityPosition(state: EntityVisualState): void {
@@ -583,6 +587,7 @@
       entityVisualStates = new Map<number, EntityVisualState>();
       cachedColumns = [];
       lastLayoutEntities = null;
+      lastSyncedEntities = null;
       lastLayoutMode = "spatial";
       initialFitDone = false;
 
@@ -677,10 +682,19 @@
     return () => {
       destroyed = true;
       cancelAnimation();
+      if (tooltipFrameId) {
+        cancelAnimationFrame(tooltipFrameId);
+        tooltipFrameId = 0;
+      }
       window.removeEventListener("keydown", onKeyDown);
       resizeObserver.disconnect();
 
-      entityVisualStates.clear();
+      for (const [id, state] of Array.from(entityVisualStates.entries())) {
+        destroyEntityVisualState(id, state);
+      }
+
+      entityVisualStates = new Map<number, EntityVisualState>();
+      lastSyncedEntities = null;
       hoveredEntityId = null;
       tooltipVisible = false;
       tooltipEl = null;
@@ -699,24 +713,28 @@
   });
 
   $effect(() => {
-    void world.entities;
+    const entities = world.entities;
     void layoutMode;
     void viewport;
 
     if (!viewport) return;
+    if (lastSyncedEntities !== entities) {
+      syncEntityVisualStates(entities);
+    }
 
-    syncEntityVisualStates(world.entities);
     recomputeLayout();
   });
 
   $effect(() => {
-    void world.entities;
+    const entities = world.entities;
     void currentViewLevel;
     void viewport;
 
     if (!viewport) return;
+    if (lastSyncedEntities !== entities) {
+      syncEntityVisualStates(entities);
+    }
 
-    syncEntityVisualStates(world.entities);
     refreshEntityBaseVisuals();
   });
 
@@ -725,6 +743,8 @@
     const changedEntityIds = world.changedEntityIds;
     const errorEntityIds = world.errorEntityIds;
     const pastErrorEntityIds = world.pastErrorEntityIds;
+
+    if (!viewport) return;
 
     const affected = new Set<number>();
 
@@ -765,6 +785,8 @@
     const hasActiveFilter = world.hasActiveFilter;
     const matchingEntityIds = world.matchingEntityIds;
 
+    if (!viewport) return;
+
     const affected = new Set<number>();
     if (hasActiveFilter !== filterActive) {
       for (const id of entityVisualStates.keys()) {
@@ -788,6 +810,8 @@
   $effect(() => {
     const nextDiffCounts = world.entityDiffCounts;
     const isDetail = currentViewLevel === "detail";
+
+    if (!viewport) return;
 
     const affected = new Set<number>();
     if (isDetail !== previousBadgeDetail) {
@@ -813,12 +837,34 @@
     void tooltipVisible;
     void tooltipText;
 
+    if (tooltipFrameId) {
+      cancelAnimationFrame(tooltipFrameId);
+      tooltipFrameId = 0;
+    }
+
     if (!tooltipVisible) return;
 
-    queueMicrotask(() => {
-      if (!tooltipVisible) return;
+    let retries = 2;
+    const schedulePosition = (): void => {
+      if (!tooltipVisible) {
+        tooltipFrameId = 0;
+        return;
+      }
+
+      const width = tooltipEl?.offsetWidth ?? 0;
+      const height = tooltipEl?.offsetHeight ?? 0;
+
+      if (width === 0 && height === 0 && retries > 0) {
+        retries -= 1;
+        tooltipFrameId = requestAnimationFrame(schedulePosition);
+        return;
+      }
+
       setTooltipPosition(tooltipAnchorX, tooltipAnchorY);
-    });
+      tooltipFrameId = 0;
+    };
+
+    tooltipFrameId = requestAnimationFrame(schedulePosition);
   });
 </script>
 
