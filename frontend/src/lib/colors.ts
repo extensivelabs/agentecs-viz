@@ -1,6 +1,5 @@
 import { DEFAULT_COLOR_PALETTE } from "./config";
 import { getArchetypeKey, hashString } from "./utils";
-import { world } from "./state/world.svelte";
 
 export function hexToNumber(hex: string): number {
   return parseInt(hex.replace("#", ""), 16);
@@ -31,14 +30,10 @@ export function resolveArchetypeColor(
   return DEFAULT_COLOR_PALETTE[idx];
 }
 
-export function getArchetypeColor(archetype: readonly string[]): number {
-  return resolveArchetypeColor(
-    archetype,
-    world.archetypeConfigMap,
-    world.config?.color_palette,
-  );
-}
-
-export function getArchetypeColorCSS(archetype: readonly string[]): string {
-  return numberToHex(getArchetypeColor(archetype));
+export function resolveArchetypeColorCSS(
+  archetype: readonly string[],
+  configMap: Map<string, { color?: string | null }>,
+  palette?: string[] | null,
+): string {
+  return numberToHex(resolveArchetypeColor(archetype, configMap, palette));
 }
