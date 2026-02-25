@@ -23,6 +23,9 @@
     ) {
       return;
     }
+    if (event.ctrlKey || event.altKey || event.metaKey) {
+      return;
+    }
     const num = parseInt(event.key);
     if (num >= 1 && num <= tabs.length) {
       const tab = tabs[num - 1];

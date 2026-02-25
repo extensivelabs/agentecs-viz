@@ -256,6 +256,38 @@ describe("TimelineBar", () => {
     document.body.removeChild(input);
   });
 
+  it("keyboard shortcuts ignored when modifier keys are pressed", async () => {
+    connectWithHistory(5, 10);
+    render(TimelineBar);
+
+    const pauseSpy = vi.spyOn(world, "togglePause");
+    const stepSpy = vi.spyOn(world, "step");
+    const stepBackSpy = vi.spyOn(world, "stepBack");
+
+    await fireEvent.keyDown(window, { key: " ", ctrlKey: true });
+    await fireEvent.keyDown(window, { key: "ArrowRight", altKey: true });
+    await fireEvent.keyDown(window, { key: "ArrowLeft", metaKey: true });
+
+    expect(pauseSpy).not.toHaveBeenCalled();
+    expect(stepSpy).not.toHaveBeenCalled();
+    expect(stepBackSpy).not.toHaveBeenCalled();
+  });
+
+  it("tick input rejects negative values", async () => {
+    connectWithHistory(5, 10);
+    render(TimelineBar);
+
+    const seekSpy = vi.spyOn(world, "seek");
+    const tickButton = screen.getByTestId("tick-value");
+    await fireEvent.click(tickButton);
+
+    const input = screen.getByTestId("tick-input") as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "-3" } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(seekSpy).not.toHaveBeenCalled();
+  });
+
   it("scrubber has correct ARIA attributes", () => {
     connectWithHistory(5, 10);
     render(TimelineBar);

@@ -62,6 +62,9 @@
     ) {
       return;
     }
+    if (e.ctrlKey || e.altKey || e.metaKey) {
+      return;
+    }
 
     if (e.key === " ") {
       e.preventDefault();
@@ -98,11 +101,11 @@
   function commitTickEdit(): void {
     if (!editingTick) return;
     editingTick = false;
-    const val = parseInt(tickInputValue, 10);
-    if (!isNaN(val)) {
-      const clamped = Math.min(world.maxTick, Math.max(world.minTick, val));
-      world.seek(clamped);
-    }
+    const trimmed = tickInputValue.trim();
+    if (!/^\d+$/.test(trimmed)) return;
+    const val = Number.parseInt(trimmed, 10);
+    const clamped = Math.min(world.maxTick, Math.max(world.minTick, val));
+    world.seek(clamped);
   }
 
   function cancelTickEdit(): void {

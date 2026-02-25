@@ -96,6 +96,20 @@ describe("WebSocketClient", () => {
     expect(messages).toHaveLength(0);
   });
 
+  it("warns on unknown message type", () => {
+    const { messages, callbacks } = setupCallbacks();
+    const client = new WebSocketClient("ws://test/ws", callbacks);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    client.connect();
+    const ws = MockWebSocket.instances[0];
+    ws.simulateOpen();
+    ws.simulateMessage({ type: "future_event", payload: {} });
+
+    expect(messages).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalledWith("[ws] unknown message type:", "future_event");
+  });
+
   it("logs warning on malformed JSON and does not crash", () => {
     const { messages, callbacks } = setupCallbacks();
     const client = new WebSocketClient("ws://test/ws", callbacks);

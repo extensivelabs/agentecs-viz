@@ -222,6 +222,7 @@ describe("WorldState", () => {
 
     it("logs warning on delta message", () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const ws = MockWebSocket.instances[0];
       const msg: DeltaMessage = {
         type: "delta",
         tick: 1,
@@ -233,10 +234,11 @@ describe("WorldState", () => {
           modified: {},
         },
       };
-      MockWebSocket.instances[0].simulateMessage(msg);
+      ws.simulateMessage(msg);
       expect(warnSpy).toHaveBeenCalledWith(
-        "[world] delta message received but not yet implemented",
+        "[world] delta message received but not yet implemented; requesting snapshot resync",
       );
+      expect(JSON.parse(ws.sentMessages[0])).toEqual({ command: "seek", tick: 1 });
     });
 
     it("handles tick_update message", () => {
@@ -1310,14 +1312,20 @@ describe("WorldState", () => {
       expect(state.savedQueries).toHaveLength(0);
     });
 
-    it("reconnect clears activeQuery but preserves savedQueries", () => {
+    it("reconnect preserves activeQuery and savedQueries", () => {
       state.setQuery({ name: "", clauses: [{ type: "with", component: "Agent" }] });
       state.saveQuery({ name: "kept", clauses: [{ type: "with", component: "Task" }] });
       expect(state.hasActiveFilter).toBe(true);
       expect(state.savedQueries).toHaveLength(1);
 
-      state.disconnect();
-      expect(state.activeQuery).toBeNull();
+      state.connect("ws://test/ws");
+      const ws = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+      ws.simulateOpen();
+
+      expect(state.activeQuery).toEqual({
+        name: "",
+        clauses: [{ type: "with", component: "Agent" }],
+      });
       expect(state.savedQueries).toHaveLength(1);
       expect(state.savedQueries[0].name).toBe("kept");
     });
