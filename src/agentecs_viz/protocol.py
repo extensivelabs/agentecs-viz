@@ -1,4 +1,67 @@
-"""WebSocket message protocol with literal type discriminators."""
+"""WebSocket protocol contract for agentecs-viz.
+
+Connection lifecycle
+--------------------
+Each WebSocket connection to ``/ws`` starts a new protocol session:
+
+1. Server accepts the connection.
+2. Server sends ``metadata`` first.
+3. Server sends ``snapshot`` second.
+4. Server begins streaming events while also accepting client commands.
+
+The initial ``snapshot`` is a full world state at the current tick and should be
+treated as the base state for subsequent incremental updates.
+
+Client commands
+---------------
+Command payloads are discriminated by ``command`` and validated before
+execution:
+
+- ``seek``: requires ``tick >= 0``. On success, server replies with
+  ``snapshot`` from ``source.get_snapshot(tick)`` (historical tick when
+  available; otherwise source-defined fallback).
+- ``pause`` / ``resume`` / ``step``: no additional fields. On success, server
+  replies with ``tick_update`` as an acknowledgement.
+- ``set_speed``: requires ``ticks_per_second > 0``. The command is applied with
+  no explicit acknowledgement message.
+
+Invalid command payloads are rejected with an ``error`` message.
+
+Server messages (``AnyServerEvent``)
+------------------------------------
+All server messages are discriminated by the ``type`` field:
+
+- ``metadata``: initial capabilities and runtime metadata
+  (config, tick range, pause/history support)
+- ``snapshot``: full world snapshot at a tick
+- ``delta``: incremental world update for a tick (source-dependent)
+- ``tick_update``: current tick summary and pause state
+- ``error``: protocol-level or command validation error text
+- ``error_event``: world/runtime error event with entity id and severity
+- ``span_event``: tracing span event with timing, status, and attributes
+
+Ordering and reconnection
+-------------------------
+- WebSocket frames on a single connection are delivered in send order.
+- ``metadata`` is always first and ``snapshot`` is always second.
+- After bootstrap, streamed events and command responses share one frame stream
+  and may interleave.
+- Reconnection is from scratch: clients must establish a new WebSocket session
+  and rebuild local state from the new ``metadata`` and ``snapshot`` pair.
+
+Backpressure behavior
+---------------------
+The protocol has no explicit end-to-end backpressure negotiation. Sources using
+``TickLoopSource`` fan out events through bounded per-subscriber queues. When a
+subscriber queue is full, events are dropped for that subscriber and a warning
+is logged.
+
+Limitations
+-----------
+- No explicit protocol version field.
+- No incremental schema negotiation.
+- No resume token/cursor for reconnect continuation.
+"""
 
 from __future__ import annotations
 
