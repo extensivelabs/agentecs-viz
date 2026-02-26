@@ -27,6 +27,7 @@ node_modules/
 
 # AI agents (local-only, developers should add to global gitignore)
 .claude/
+.claude/CLAUDE.md
 .opencode/
 .kiro/
 .agents/
