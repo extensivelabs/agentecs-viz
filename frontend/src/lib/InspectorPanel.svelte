@@ -8,7 +8,7 @@
     severityLabel,
     severityClasses,
   } from "./utils";
-  import { getArchetypeColorCSS } from "./colors";
+  import { resolveArchetypeColorCSS } from "./colors";
   import JsonTree from "./JsonTree.svelte";
   import type { ComponentChanges } from "./diff";
 
@@ -26,7 +26,11 @@
     const cfg = world.archetypeConfigMap.get(archetypeKey);
     return cfg?.label ?? getArchetypeDisplay(entity.archetype);
   });
-  let archetypeColor = $derived(entity ? getArchetypeColorCSS(entity.archetype) : "#888");
+  let archetypeColor = $derived(
+    entity
+      ? resolveArchetypeColorCSS(entity.archetype, world.archetypeConfigMap, world.config?.color_palette)
+      : "#888",
+  );
 
   let sortedComponents = $derived(
     entity ? [...entity.components].sort((a, b) => a.type_short.localeCompare(b.type_short)) : [],

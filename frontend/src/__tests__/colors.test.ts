@@ -1,25 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-
-// Mock world state before importing colors
-vi.mock("../lib/state/world.svelte", () => {
-  const state = {
-    archetypeConfigMap: new Map(),
-    config: null as { color_palette?: string[] | null } | null,
-  };
-  return { world: state };
-});
-
-import { hexToNumber, numberToHex, getArchetypeColor, getArchetypeColorCSS, resolveArchetypeColor } from "../lib/colors";
+import { describe, it, expect } from "vitest";
+import {
+  hexToNumber,
+  numberToHex,
+  resolveArchetypeColor,
+  resolveArchetypeColorCSS,
+} from "../lib/colors";
 import { hashString } from "../lib/utils";
-import { world } from "../lib/state/world.svelte";
 import { DEFAULT_COLOR_PALETTE } from "../lib/config";
 
 describe("colors", () => {
-  beforeEach(() => {
-    (world as { archetypeConfigMap: Map<string, unknown> }).archetypeConfigMap = new Map();
-    (world as { config: unknown }).config = null;
-  });
-
   describe("hexToNumber", () => {
     it("converts hex string to number", () => {
       expect(hexToNumber("#ff0000")).toBe(0xff0000);
@@ -63,59 +52,6 @@ describe("colors", () => {
     });
   });
 
-  describe("getArchetypeColor", () => {
-    it("returns same color for same archetype", () => {
-      const a = getArchetypeColor(["A", "B"]);
-      const b = getArchetypeColor(["A", "B"]);
-      expect(a).toBe(b);
-    });
-
-    it("returns same color regardless of archetype order (sorted key)", () => {
-      const a = getArchetypeColor(["B", "A"]);
-      const b = getArchetypeColor(["A", "B"]);
-      expect(a).toBe(b);
-    });
-
-    it("uses config color when available", () => {
-      (world as { archetypeConfigMap: Map<string, { key: string; color: string }> }).archetypeConfigMap = new Map([
-        ["A,B", { key: "A,B", color: "#ff0000" }],
-      ]);
-      expect(getArchetypeColor(["A", "B"])).toBe(0xff0000);
-    });
-
-    it("uses custom palette when config color not set", () => {
-      (world as { config: { color_palette: string[] } }).config = {
-        color_palette: ["#111111", "#222222", "#333333"],
-      };
-      const color = getArchetypeColor(["X", "Y"]);
-      const palette = [0x111111, 0x222222, 0x333333];
-      expect(palette).toContain(color);
-    });
-
-    it("falls back to DEFAULT_COLOR_PALETTE", () => {
-      const color = getArchetypeColor(["Foo"]);
-      expect(DEFAULT_COLOR_PALETTE).toContain(color);
-    });
-
-    it("different archetypes may get different colors", () => {
-      // Not guaranteed for all pairs, but likely with enough variety
-      const colors = new Set<number>();
-      const archetypes = [["A"], ["B"], ["C"], ["D"], ["E"], ["F"], ["G"], ["H"]];
-      for (const arch of archetypes) {
-        colors.add(getArchetypeColor(arch));
-      }
-      // At least some should be different
-      expect(colors.size).toBeGreaterThan(1);
-    });
-  });
-
-  describe("getArchetypeColorCSS", () => {
-    it("returns hex string", () => {
-      const css = getArchetypeColorCSS(["A"]);
-      expect(css).toMatch(/^#[0-9a-f]{6}$/);
-    });
-  });
-
   describe("resolveArchetypeColor (pure)", () => {
     it("uses config color when present", () => {
       const configMap = new Map([["A,B", { color: "#ff0000" }]]);
@@ -146,6 +82,19 @@ describe("colors", () => {
       const a = resolveArchetypeColor(["A", "B"], configMap);
       const b = resolveArchetypeColor(["A", "B"], configMap);
       expect(a).toBe(b);
+    });
+  });
+
+  describe("resolveArchetypeColorCSS (pure)", () => {
+    it("returns config color as CSS hex", () => {
+      const configMap = new Map([["A", { color: "#abc123" }]]);
+      expect(resolveArchetypeColorCSS(["A"], configMap)).toBe("#abc123");
+    });
+
+    it("returns a hex string for palette-resolved colors", () => {
+      const configMap = new Map<string, { color?: string }>();
+      const css = resolveArchetypeColorCSS(["X", "Y"], configMap, ["#111111", "#222222", "#333333"]);
+      expect(css).toMatch(/^#[0-9a-f]{6}$/);
     });
   });
 });

@@ -3,7 +3,7 @@
   import { Application, Circle, Graphics, Text, TextStyle } from "pixi.js";
   import { Viewport } from "pixi-viewport";
   import { world } from "./state/world.svelte";
-  import { getArchetypeColor, getArchetypeColorCSS } from "./colors";
+  import { resolveArchetypeColor, resolveArchetypeColorCSS } from "./colors";
   import { getArchetypeKey, getArchetypeDisplay } from "./utils";
   import { computeLayout, PIPELINE_HEADER_Y } from "./layout";
   import type { LayoutMode, ColumnInfo, EntityPosition } from "./layout";
@@ -107,7 +107,7 @@
       .map(([key, { display, archetype, count }]) => ({
         key,
         display: display || "(empty)",
-        color: getArchetypeColorCSS(archetype),
+        color: resolveArchetypeColorCSS(archetype, world.archetypeConfigMap, world.config?.color_palette),
         count,
       }));
   });
@@ -440,7 +440,11 @@
       const state = entityVisualStates.get(entity.id);
       if (!state) continue;
 
-      state.fillColor = getArchetypeColor(entity.archetype);
+      state.fillColor = resolveArchetypeColor(
+        entity.archetype,
+        world.archetypeConfigMap,
+        world.config?.color_palette,
+      );
       state.radius = isDetail ? entityRadius(entity.components.length, maxR) : OVERVIEW_DOT_RADIUS;
       state.tooltip = `Entity ${entity.id}\n${getArchetypeDisplay(entity.archetype)}`;
 
