@@ -1,14 +1,16 @@
 <script lang="ts">
+  import TickTimeline from "./TickTimeline.svelte";
   import { world } from "./state/world.svelte";
   import JsonTree from "./JsonTree.svelte";
   import {
-    detectSpanType,
-    getModelName,
-    getTokenCounts,
-    getSpanDurationMs,
     buildSpanTree,
+    detectSpanType,
+    flattenTree,
+    formatDuration,
+    getModelName,
+    getSpanDurationMs,
+    getTokenCounts,
     SPAN_TYPE_COLORS,
-    type SpanTreeNode,
     type SpanType,
   } from "./traces";
   import type { SpanEventMessage } from "./types";
@@ -29,6 +31,17 @@
     return [...grouped.entries()].sort((a, b) => b[0] - a[0]);
   });
 
+  let viewMode: "list" | "timeline" = $state("list");
+  let selectedTickIndex: number = $state(0);
+
+  let maxTickIndex = $derived(Math.max(0, spansByTick.length - 1));
+  let activeTickIndex = $derived(Math.min(selectedTickIndex, maxTickIndex));
+  let selectedTickEntry = $derived(spansByTick[activeTickIndex] ?? null);
+  let selectedTick = $derived(selectedTickEntry ? selectedTickEntry[0] : null);
+  let selectedTickSpans = $derived(
+    selectedTickEntry ? selectedTickEntry[1] : [],
+  );
+
   let selectedSpan = $derived(world.selectedSpan);
   let selectedSpanType = $derived(
     selectedSpan ? detectSpanType(selectedSpan.attributes) : null,
@@ -47,16 +60,6 @@
     role: string;
     content: string;
   };
-
-  function flattenTree(nodes: SpanTreeNode[]): SpanTreeNode[] {
-    const result: SpanTreeNode[] = [];
-    function walk(node: SpanTreeNode) {
-      result.push(node);
-      for (const child of node.children) walk(child);
-    }
-    for (const n of nodes) walk(n);
-    return result;
-  }
 
   function tickTimeRange(spans: SpanEventMessage[]): [number, number] {
     let min = Infinity;
@@ -83,10 +86,12 @@
     return type.toUpperCase();
   }
 
-  function formatDuration(ms: number): string {
-    if (ms < 1) return `${(ms * 1000).toFixed(0)}μs`;
-    if (ms < 1000) return `${ms.toFixed(0)}ms`;
-    return `${(ms / 1000).toFixed(2)}s`;
+  function showOlderTick(): void {
+    selectedTickIndex = Math.min(activeTickIndex + 1, maxTickIndex);
+  }
+
+  function showNewerTick(): void {
+    selectedTickIndex = Math.max(activeTickIndex - 1, 0);
   }
 
   function isRecord(value: unknown): value is Record<string, unknown> {
@@ -160,49 +165,109 @@
         No spans recorded
       </div>
     {:else}
-      {#each spansByTick as [tick, tickSpans] (tick)}
-        {@const tree = buildSpanTree(tickSpans)}
-        {@const flat = flattenTree(tree)}
-        {@const range = tickTimeRange(tickSpans)}
-        <div class="border-b border-bg-tertiary">
-          <div class="px-4 py-1.5 text-xs font-medium text-text-muted">
-            Tick {tick}
-            <span class="ml-1 text-text-muted/50">
-              ({tickSpans.length} {tickSpans.length === 1 ? "span" : "spans"})
-            </span>
-          </div>
-          {#each flat as node (node.span.span_id)}
-            {@const type = detectSpanType(node.span.attributes)}
-            {@const duration = getSpanDurationMs(node.span)}
-            {@const isSelected = node.span.span_id === world.selectedSpanId}
-            <button
-              class="flex w-full items-center gap-2 px-4 py-1.5 text-left text-sm hover:bg-bg-tertiary/50 {isSelected ? 'bg-accent/10' : ''}"
-              style:padding-left={`${20 + node.depth * 20}px`}
-              onclick={() => world.selectSpan(node.span.span_id)}
-              data-testid="span-row"
-            >
-              <span
-                class="inline-block shrink-0 rounded px-1.5 py-0.5 text-xs font-medium text-white"
-                style:background-color={SPAN_TYPE_COLORS[type]}
-              >
-                {spanTypeLabel(type)}
-              </span>
-              <span class="min-w-0 truncate text-text-primary">
-                {node.span.name}
-              </span>
-              <span class="shrink-0 text-text-muted">
-                {formatDuration(duration)}
-              </span>
-              <div class="relative ml-auto h-3.5 w-28 shrink-0 rounded bg-bg-tertiary">
-                <div
-                  class="absolute top-0 h-full rounded opacity-70"
-                  style="{barStyle(node.span, range)} background-color: {SPAN_TYPE_COLORS[type]};"
-                ></div>
-              </div>
-            </button>
-          {/each}
+      <div class="flex items-center justify-between border-b border-bg-tertiary px-4 py-2">
+        <div class="inline-flex items-center rounded bg-bg-tertiary p-0.5" data-testid="traces-view-toggle">
+          <button
+            class="rounded px-3 py-1 text-sm"
+            class:bg-accent={viewMode === "list"}
+            class:text-white={viewMode === "list"}
+            class:text-text-muted={viewMode !== "list"}
+            class:hover:text-text-secondary={viewMode !== "list"}
+            onclick={() => (viewMode = "list")}
+            data-testid="traces-view-list"
+          >
+            List
+          </button>
+          <button
+            class="rounded px-3 py-1 text-sm"
+            class:bg-accent={viewMode === "timeline"}
+            class:text-white={viewMode === "timeline"}
+            class:text-text-muted={viewMode !== "timeline"}
+            class:hover:text-text-secondary={viewMode !== "timeline"}
+            onclick={() => (viewMode = "timeline")}
+            data-testid="traces-view-timeline"
+          >
+            Timeline
+          </button>
         </div>
-      {/each}
+
+        {#if viewMode === "timeline" && selectedTick !== null}
+          <div class="flex items-center gap-2" data-testid="timeline-tick-selector">
+            <button
+              class="h-7 rounded bg-bg-tertiary px-2 text-sm text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              onclick={showOlderTick}
+              disabled={activeTickIndex >= maxTickIndex}
+              data-testid="timeline-tick-older"
+            >
+              Older
+            </button>
+            <div class="text-sm text-text-secondary" data-testid="timeline-current-tick">
+              Tick {selectedTick}
+              <span class="ml-1 text-text-muted/60">
+                ({selectedTickSpans.length} {selectedTickSpans.length === 1 ? "span" : "spans"})
+              </span>
+            </div>
+            <button
+              class="h-7 rounded bg-bg-tertiary px-2 text-sm text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              onclick={showNewerTick}
+              disabled={activeTickIndex === 0}
+              data-testid="timeline-tick-newer"
+            >
+              Newer
+            </button>
+          </div>
+        {/if}
+      </div>
+
+      {#if viewMode === "list"}
+        {#each spansByTick as [tick, tickSpans] (tick)}
+          {@const tree = buildSpanTree(tickSpans)}
+          {@const flat = flattenTree(tree)}
+          {@const range = tickTimeRange(tickSpans)}
+          <div class="border-b border-bg-tertiary">
+            <div class="px-4 py-1.5 text-xs font-medium text-text-muted">
+              Tick {tick}
+              <span class="ml-1 text-text-muted/50">
+                ({tickSpans.length} {tickSpans.length === 1 ? "span" : "spans"})
+              </span>
+            </div>
+            {#each flat as node (node.span.span_id)}
+              {@const type = detectSpanType(node.span.attributes)}
+              {@const duration = getSpanDurationMs(node.span)}
+              {@const isSelected = node.span.span_id === world.selectedSpanId}
+              <button
+                class="flex w-full items-center gap-2 px-4 py-1.5 text-left text-sm hover:bg-bg-tertiary/50 {isSelected ? 'bg-accent/10' : ''}"
+                style:padding-left={`${20 + node.depth * 20}px`}
+                onclick={() => world.selectSpan(node.span.span_id)}
+                data-testid="span-row"
+              >
+                <span
+                  class="inline-block shrink-0 rounded px-1.5 py-0.5 text-xs font-medium text-white"
+                  style:background-color={SPAN_TYPE_COLORS[type]}
+                >
+                  {spanTypeLabel(type)}
+                </span>
+                <span class="min-w-0 truncate text-text-primary">
+                  {node.span.name}
+                </span>
+                <span class="shrink-0 text-text-muted">
+                  {formatDuration(duration)}
+                </span>
+                <div class="relative ml-auto h-3.5 w-28 shrink-0 rounded bg-bg-tertiary">
+                  <div
+                    class="absolute top-0 h-full rounded opacity-70"
+                    style="{barStyle(node.span, range)} background-color: {SPAN_TYPE_COLORS[type]};"
+                  ></div>
+                </div>
+              </button>
+            {/each}
+          </div>
+        {/each}
+      {:else}
+        <div class="px-3 py-2" data-testid="timeline-view">
+          <TickTimeline spans={selectedTickSpans} />
+        </div>
+      {/if}
     {/if}
   </div>
 

@@ -1,12 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
   aggregateSpanUsage,
+  buildSpanTree,
   detectSpanType,
+  flattenTree,
+  formatDuration,
   getModelName,
   getSpanCostUsd,
-  getTokenCounts,
   getSpanDurationMs,
-  buildSpanTree,
+  getTokenCounts,
 } from "../lib/traces";
 import type { SpanEventMessage } from "../lib/types";
 
@@ -217,5 +219,54 @@ describe("buildSpanTree", () => {
 
     const tree = buildSpanTree([root, c1, c2]);
     expect(tree[0].children[0].children[0].depth).toBe(2);
+  });
+});
+
+describe("flattenTree", () => {
+  it("returns empty for no nodes", () => {
+    expect(flattenTree([])).toEqual([]);
+  });
+
+  it("flattens a single root node", () => {
+    const tree = buildSpanTree([makeSpan({ span_id: "root" })]);
+    const flat = flattenTree(tree);
+
+    expect(flat).toHaveLength(1);
+    expect(flat[0].span.span_id).toBe("root");
+    expect(flat[0].depth).toBe(0);
+  });
+
+  it("preserves pre-order nesting and depths", () => {
+    const root = makeSpan({ span_id: "root" });
+    const child = makeSpan({ span_id: "child", parent_span_id: "root" });
+    const grandchild = makeSpan({
+      span_id: "grandchild",
+      parent_span_id: "child",
+    });
+    const sibling = makeSpan({ span_id: "sibling", parent_span_id: "root" });
+
+    const flat = flattenTree(buildSpanTree([root, child, grandchild, sibling]));
+
+    expect(flat.map((node) => node.span.span_id)).toEqual([
+      "root",
+      "child",
+      "grandchild",
+      "sibling",
+    ]);
+    expect(flat.map((node) => node.depth)).toEqual([0, 1, 2, 1]);
+  });
+});
+
+describe("formatDuration", () => {
+  it("formats sub-millisecond durations as microseconds", () => {
+    expect(formatDuration(0.25)).toBe("250μs");
+  });
+
+  it("formats millisecond durations", () => {
+    expect(formatDuration(125)).toBe("125ms");
+  });
+
+  it("formats second durations", () => {
+    expect(formatDuration(1250)).toBe("1.25s");
   });
 });

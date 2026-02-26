@@ -48,6 +48,46 @@ describe("TracesTab", () => {
     expect(rows.length).toBe(2);
   });
 
+  it("switches between list and timeline views", async () => {
+    sendSnapshot(3);
+    sendSpan(1, 1, { name: "llm.gpt-4o", span_id: "s1" });
+    sendSpan(2, 2, { name: "tool.search", span_id: "s2" });
+
+    render(TracesTab);
+    expect(screen.getAllByTestId("span-row").length).toBe(2);
+
+    await fireEvent.click(screen.getByTestId("traces-view-timeline"));
+    expect(screen.getByTestId("timeline-view")).toBeDefined();
+    expect(screen.getByTestId("tick-timeline")).toBeDefined();
+
+    await fireEvent.click(screen.getByTestId("traces-view-list"));
+    expect(screen.getAllByTestId("span-row").length).toBe(2);
+  });
+
+  it("navigates timeline ticks with arrow controls", async () => {
+    sendSnapshot(4);
+    sendSpan(1, 1, { name: "span-1", span_id: "s1" });
+    sendSpan(2, 1, { name: "span-2", span_id: "s2" });
+    sendSpan(3, 1, { name: "span-3", span_id: "s3" });
+
+    render(TracesTab);
+    await fireEvent.click(screen.getByTestId("traces-view-timeline"));
+
+    expect(screen.getByTestId("timeline-current-tick").textContent).toContain(
+      "Tick 3",
+    );
+
+    await fireEvent.click(screen.getByTestId("timeline-tick-older"));
+    expect(screen.getByTestId("timeline-current-tick").textContent).toContain(
+      "Tick 2",
+    );
+
+    await fireEvent.click(screen.getByTestId("timeline-tick-newer"));
+    expect(screen.getByTestId("timeline-current-tick").textContent).toContain(
+      "Tick 3",
+    );
+  });
+
   it("clicking span selects it", async () => {
     sendSnapshot(3);
     sendSpan(1, 1, { name: "llm.gpt-4o", span_id: "target" });
