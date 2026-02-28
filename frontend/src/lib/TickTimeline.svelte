@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { world } from "./state/world.svelte";
   import {
     SPAN_TYPE_COLORS,
@@ -54,7 +55,11 @@
   const MIN_BAR_WIDTH = 2;
 
   let containerWidth = $state(0);
+  let timelineContainer: HTMLDivElement | null = null;
+  let timelineRect = $state<DOMRect | null>(null);
   let tooltip = $state<TooltipState | null>(null);
+  let pendingTooltip: TooltipState | null = null;
+  let tooltipRafId: number | null = null;
 
   let tree = $derived(buildSpanTree(spans));
   let flatNodes = $derived(flattenTree(tree));
@@ -63,6 +68,11 @@
   let barAreaWidth = $derived(
     Math.max(120, svgWidth - barAreaLeft - HORIZONTAL_PADDING),
   );
+
+  $effect(() => {
+    containerWidth;
+    refreshTimelineRect();
+  });
 
   let rootIndexBySpanId = $derived.by(() => {
     const map = new Map<string, number>();
@@ -117,12 +127,21 @@
       const durationMs = getSpanDurationMs(node.span);
       const startRatio = (node.span.start_time - timeRange.min) / timeRange.duration;
       const spanRatio = (node.span.end_time - node.span.start_time) / timeRange.duration;
+      const barRight = barAreaLeft + barAreaWidth;
       const x = barAreaLeft + Math.max(0, Math.min(1, startRatio)) * barAreaWidth;
-      const maxWidth = barAreaLeft + barAreaWidth - x;
-      const width = Math.max(
-        MIN_BAR_WIDTH,
-        Math.min(spanRatio * barAreaWidth, maxWidth),
-      );
+      const maxWidth = Math.max(0, barRight - x);
+      const unclampedWidth = Math.max(0, spanRatio * barAreaWidth);
+      let width = Math.min(unclampedWidth, maxWidth);
+      if (width < MIN_BAR_WIDTH) {
+        width = MIN_BAR_WIDTH;
+      }
+
+      let adjustedX = x;
+      const overflow = adjustedX + width - barRight;
+      if (overflow > 0) {
+        adjustedX = Math.max(barAreaLeft, adjustedX - overflow);
+      }
+      width = Math.max(0, Math.min(width, barRight - adjustedX));
 
       timelineRows.push({
         node,
@@ -130,7 +149,7 @@
         y: currentY,
         barY: currentY + (ROW_HEIGHT - barHeight) / 2,
         barHeight,
-        x,
+        x: adjustedX,
         width,
         labelX: HORIZONTAL_PADDING + node.depth * 16,
         durationMs,
@@ -165,24 +184,62 @@
     return `${value.slice(0, maxLength - 3)}...`;
   }
 
-  function showTooltip(event: MouseEvent, row: TimelineRow): void {
-    const container = (event.currentTarget as SVGElement)?.closest(
-      "[data-testid='tick-timeline']",
-    );
-    if (!(container instanceof HTMLElement)) return;
+  function refreshTimelineRect(): void {
+    if (!timelineContainer) return;
+    timelineRect = timelineContainer.getBoundingClientRect();
+  }
 
-    const rect = container.getBoundingClientRect();
-    tooltip = {
-      x: Math.min(event.clientX - rect.left + 12, Math.max(12, svgWidth - 220)),
-      y: Math.max(8, event.clientY - rect.top + 12),
+  function flushPendingTooltip(): void {
+    tooltipRafId = null;
+    if (!pendingTooltip) return;
+
+    const nextTooltip = pendingTooltip;
+    pendingTooltip = null;
+    if (
+      tooltip &&
+      tooltip.x === nextTooltip.x &&
+      tooltip.y === nextTooltip.y &&
+      tooltip.name === nextTooltip.name &&
+      tooltip.duration === nextTooltip.duration
+    ) {
+      return;
+    }
+
+    tooltip = nextTooltip;
+  }
+
+  function showTooltip(event: MouseEvent, row: TimelineRow): void {
+    if (!timelineRect) {
+      refreshTimelineRect();
+    }
+    if (!timelineRect) return;
+
+    pendingTooltip = {
+      x: Math.min(event.clientX - timelineRect.left + 12, Math.max(12, svgWidth - 220)),
+      y: Math.max(8, event.clientY - timelineRect.top + 12),
       name: row.node.span.name,
       duration: formatDuration(row.durationMs),
     };
+
+    if (tooltipRafId === null) {
+      tooltipRafId = requestAnimationFrame(flushPendingTooltip);
+    }
   }
 
   function clearTooltip(): void {
+    pendingTooltip = null;
+    if (tooltipRafId !== null) {
+      cancelAnimationFrame(tooltipRafId);
+      tooltipRafId = null;
+    }
     tooltip = null;
   }
+
+  onDestroy(() => {
+    if (tooltipRafId !== null) {
+      cancelAnimationFrame(tooltipRafId);
+    }
+  });
 
   function handleBarKeydown(event: KeyboardEvent, spanId: string): void {
     if (event.key === "Enter" || event.key === " ") {
@@ -192,7 +249,14 @@
   }
 </script>
 
-<div class="relative w-full" bind:clientWidth={containerWidth} data-testid="tick-timeline">
+<svelte:window onresize={refreshTimelineRect} />
+
+<div
+  class="relative w-full"
+  bind:this={timelineContainer}
+  bind:clientWidth={containerWidth}
+  data-testid="tick-timeline"
+>
   {#if rows.length === 0}
     <div
       class="flex h-56 items-center justify-center text-sm text-text-muted"
@@ -263,6 +327,7 @@
           data-span-id={row.node.span.span_id}
           onclick={() => world.selectSpan(row.node.span.span_id)}
           onkeydown={(event) => handleBarKeydown(event, row.node.span.span_id)}
+          onmouseenter={refreshTimelineRect}
           onmousemove={(event) => showTooltip(event, row)}
           onmouseleave={clearTooltip}
           tabindex="0"

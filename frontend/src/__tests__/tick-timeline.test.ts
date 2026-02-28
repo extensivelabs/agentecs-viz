@@ -72,6 +72,26 @@ describe("TickTimeline", () => {
     expect(lateWidth).toBeLessThan(earlyWidth);
   });
 
+  it("keeps right-edge bars within timeline bounds", () => {
+    const spans = [
+      makeTimelineSpan("base", 10, 10.5),
+      makeTimelineSpan("edge", 10.5, 10.5),
+    ];
+
+    render(TickTimeline, { spans });
+
+    const edgeBar = document.querySelector(
+      "[data-span-id='edge']",
+    ) as SVGRectElement;
+    const axisLine = document.querySelector("svg line") as SVGLineElement;
+
+    const x = Number(edgeBar.getAttribute("x"));
+    const width = Number(edgeBar.getAttribute("width"));
+    const rightBound = Number(axisLine.getAttribute("x2"));
+
+    expect(x + width).toBeLessThanOrEqual(rightBound + 1e-9);
+  });
+
   it("selects a span when its bar is clicked", async () => {
     const spans = [makeTimelineSpan("selected", 10, 10.5)];
 
