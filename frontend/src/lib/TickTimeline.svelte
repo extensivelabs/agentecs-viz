@@ -37,6 +37,13 @@
     duration: string;
   }
 
+  interface PendingTooltipState {
+    clientX: number;
+    clientY: number;
+    name: string;
+    duration: string;
+  }
+
   interface TimeRange {
     min: number;
     max: number;
@@ -58,7 +65,7 @@
   let timelineContainer: HTMLDivElement | null = null;
   let timelineRect = $state<DOMRect | null>(null);
   let tooltip = $state<TooltipState | null>(null);
-  let pendingTooltip: TooltipState | null = null;
+  let pendingTooltip: PendingTooltipState | null = null;
   let tooltipRafId: number | null = null;
 
   let tree = $derived(buildSpanTree(spans));
@@ -193,30 +200,39 @@
     tooltipRafId = null;
     if (!pendingTooltip) return;
 
+    refreshTimelineRect();
+    if (!timelineRect) return;
+
     const nextTooltip = pendingTooltip;
     pendingTooltip = null;
+    const x = Math.min(
+      nextTooltip.clientX - timelineRect.left + 12,
+      Math.max(12, svgWidth - 220),
+    );
+    const y = Math.max(8, nextTooltip.clientY - timelineRect.top + 12);
+
     if (
       tooltip &&
-      tooltip.x === nextTooltip.x &&
-      tooltip.y === nextTooltip.y &&
+      tooltip.x === x &&
+      tooltip.y === y &&
       tooltip.name === nextTooltip.name &&
       tooltip.duration === nextTooltip.duration
     ) {
       return;
     }
 
-    tooltip = nextTooltip;
+    tooltip = {
+      x,
+      y,
+      name: nextTooltip.name,
+      duration: nextTooltip.duration,
+    };
   }
 
   function showTooltip(event: MouseEvent, row: TimelineRow): void {
-    if (!timelineRect) {
-      refreshTimelineRect();
-    }
-    if (!timelineRect) return;
-
     pendingTooltip = {
-      x: Math.min(event.clientX - timelineRect.left + 12, Math.max(12, svgWidth - 220)),
-      y: Math.max(8, event.clientY - timelineRect.top + 12),
+      clientX: event.clientX,
+      clientY: event.clientY,
       name: row.node.span.name,
       duration: formatDuration(row.durationMs),
     };
@@ -297,6 +313,7 @@
           font-size="11"
           text-anchor="middle"
           fill="rgb(148 163 184)"
+          pointer-events="none"
         >
           {marker.label}
         </text>
@@ -308,6 +325,7 @@
           y={row.y + ROW_HEIGHT / 2 + 4}
           font-size="12"
           fill="rgb(226 232 240)"
+          pointer-events="none"
         >
           {truncateLabel(row.node.span.name)}
         </text>
@@ -340,6 +358,7 @@
           y={row.y + ROW_HEIGHT / 2 + 4}
           font-size="11"
           fill="rgb(148 163 184)"
+          pointer-events="none"
         >
           {formatDuration(row.durationMs)}
         </text>
