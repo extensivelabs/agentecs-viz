@@ -32,12 +32,26 @@
   });
 
   let viewMode: "list" | "timeline" = $state("list");
-  let selectedTickIndex: number = $state(0);
+  let selectedTick: number | null = $state(null);
 
+  let selectedTickEntry = $derived.by(() => {
+    if (spansByTick.length === 0) return null;
+
+    if (selectedTick !== null) {
+      const match = spansByTick.find(([tick]) => tick === selectedTick);
+      if (match) return match;
+    }
+
+    return spansByTick[0];
+  });
+
+  let activeTickIndex = $derived(
+    selectedTickEntry
+      ? spansByTick.findIndex(([tick]) => tick === selectedTickEntry[0])
+      : 0,
+  );
   let maxTickIndex = $derived(Math.max(0, spansByTick.length - 1));
-  let activeTickIndex = $derived(Math.min(selectedTickIndex, maxTickIndex));
-  let selectedTickEntry = $derived(spansByTick[activeTickIndex] ?? null);
-  let selectedTick = $derived(selectedTickEntry ? selectedTickEntry[0] : null);
+  let activeTick = $derived(selectedTickEntry ? selectedTickEntry[0] : null);
   let selectedTickSpans = $derived(
     selectedTickEntry ? selectedTickEntry[1] : [],
   );
@@ -87,11 +101,15 @@
   }
 
   function showOlderTick(): void {
-    selectedTickIndex = Math.min(activeTickIndex + 1, maxTickIndex);
+    if (!selectedTickEntry) return;
+    const nextIndex = Math.min(activeTickIndex + 1, maxTickIndex);
+    selectedTick = spansByTick[nextIndex]?.[0] ?? selectedTickEntry[0];
   }
 
   function showNewerTick(): void {
-    selectedTickIndex = Math.max(activeTickIndex - 1, 0);
+    if (!selectedTickEntry) return;
+    const nextIndex = Math.max(activeTickIndex - 1, 0);
+    selectedTick = spansByTick[nextIndex]?.[0] ?? selectedTickEntry[0];
   }
 
   function isRecord(value: unknown): value is Record<string, unknown> {
@@ -191,7 +209,7 @@
           </button>
         </div>
 
-        {#if viewMode === "timeline" && selectedTick !== null}
+        {#if viewMode === "timeline" && activeTick !== null}
           <div class="flex items-center gap-2" data-testid="timeline-tick-selector">
             <button
               class="h-7 rounded bg-bg-tertiary px-2 text-sm text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
@@ -202,7 +220,7 @@
               Older
             </button>
             <div class="text-sm text-text-secondary" data-testid="timeline-current-tick">
-              Tick {selectedTick}
+              Tick {activeTick}
               <span class="ml-1 text-text-muted/60">
                 ({selectedTickSpans.length} {selectedTickSpans.length === 1 ? "span" : "spans"})
               </span>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { render, screen, fireEvent, waitFor } from "@testing-library/svelte";
 import TracesTab from "../lib/TracesTab.svelte";
 import { world } from "../lib/state/world.svelte";
 import { MockWebSocket, makeSnapshot, makeSpanEvent } from "./helpers";
@@ -86,6 +86,28 @@ describe("TracesTab", () => {
     expect(screen.getByTestId("timeline-current-tick").textContent).toContain(
       "Tick 3",
     );
+  });
+
+  it("keeps selected timeline tick stable when new ticks arrive", async () => {
+    sendSnapshot(4);
+    sendSpan(1, 1, { name: "span-1", span_id: "s1" });
+    sendSpan(2, 1, { name: "span-2", span_id: "s2" });
+
+    render(TracesTab);
+    await fireEvent.click(screen.getByTestId("traces-view-timeline"));
+
+    await fireEvent.click(screen.getByTestId("timeline-tick-older"));
+    expect(screen.getByTestId("timeline-current-tick").textContent).toContain(
+      "Tick 1",
+    );
+
+    sendSpan(3, 1, { name: "span-3", span_id: "s3" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("timeline-current-tick").textContent).toContain(
+        "Tick 1",
+      );
+    });
   });
 
   it("clicking span selects it", async () => {
