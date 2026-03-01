@@ -257,6 +257,19 @@ class TestInMemoryHistoryStore:
         store.record_tick(snap)
         assert list(store.stored_ticks) == [1]
 
+    def test_out_of_order_tick_is_ignored(self, caplog):
+        import logging
+
+        caplog.set_level(logging.WARNING)
+        store = InMemoryHistoryStore(max_ticks=100, checkpoint_interval=10)
+        store.record_tick(make_snapshot(0, [make_entity(1, A={"v": 0})]))
+        store.record_tick(make_snapshot(2, [make_entity(1, A={"v": 2})]))
+        store.record_tick(make_snapshot(1, [make_entity(1, A={"v": 1})]))
+
+        assert list(store.stored_ticks) == [0, 2]
+        assert store.get_snapshot(1) is None
+        assert "Ignoring out-of-order snapshot tick" in caplog.text
+
     def test_eviction_retains_latest_ticks(self):
         """After exceeding max_ticks, store retains only the most recent ticks."""
         store = InMemoryHistoryStore(max_ticks=100, checkpoint_interval=50)

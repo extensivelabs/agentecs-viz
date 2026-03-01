@@ -178,6 +178,13 @@ class InMemoryHistoryStore:
         tick = snapshot.tick
         if tick in self._checkpoints or tick in self._deltas:
             return
+        if self._tick_order and tick <= self._tick_order[-1]:
+            logger.warning(
+                "Ignoring out-of-order snapshot tick %s (last stored tick is %s)",
+                tick,
+                self._tick_order[-1],
+            )
+            return
         is_first = len(self._tick_order) == 0
         is_checkpoint = is_first or (tick % self._checkpoint_interval == 0)
 

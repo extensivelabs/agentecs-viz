@@ -34,4 +34,14 @@ describe("isServerMessage", () => {
       }),
     ).toBe(false);
   });
+
+  it("rejects snapshot payloads with array snapshots", () => {
+    expect(
+      isServerMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot: [],
+      }),
+    ).toBe(false);
+  });
 });
