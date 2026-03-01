@@ -185,6 +185,7 @@ class MockWorldSource(TickLoopSource):
         )
         self._entity_count = entity_count
         self._archetypes = archetypes or _default_archetypes()
+        self._seed = seed
         self._rng = random.Random(seed)
         self._tick = 0
         self._next_entity_id = 0
@@ -210,6 +211,7 @@ class MockWorldSource(TickLoopSource):
         self._tick = 0
         self._next_entity_id = 0
         self._paused = False
+        self._rng = random.Random(self._seed)
         self._history.clear()
         self._entities = self._generate_entities()
         snapshot = self._build_snapshot()

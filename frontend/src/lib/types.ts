@@ -176,14 +176,82 @@ function isErrorSeverity(value: unknown): value is ErrorSeverity {
   return value === "critical" || value === "warning" || value === "info";
 }
 
+function isComponentSnapshot(value: unknown): value is ComponentSnapshot {
+  return (
+    isRecord(value)
+    && isString(value.type_name)
+    && isString(value.type_short)
+    && isRecord(value.data)
+  );
+}
+
+function isEntitySnapshot(value: unknown): value is EntitySnapshot {
+  return (
+    isRecord(value)
+    && isNumber(value.id)
+    && Array.isArray(value.archetype)
+    && value.archetype.every(isString)
+    && Array.isArray(value.components)
+    && value.components.every(isComponentSnapshot)
+  );
+}
+
+function isWorldSnapshot(value: unknown): value is WorldSnapshot {
+  return (
+    isRecord(value)
+    && isNumber(value.tick)
+    && isNumber(value.timestamp)
+    && isNumber(value.entity_count)
+    && Array.isArray(value.entities)
+    && value.entities.every(isEntitySnapshot)
+    && Array.isArray(value.archetypes)
+    && value.archetypes.every(
+      (archetype): archetype is string[] => Array.isArray(archetype) && archetype.every(isString),
+    )
+    && isRecord(value.metadata)
+  );
+}
+
+function isComponentDiff(value: unknown): value is ComponentDiff {
+  return (
+    isRecord(value)
+    && isString(value.component_type)
+    && isString(value.type_name)
+    && (value.old_value === null || isRecord(value.old_value))
+    && (value.new_value === null || isRecord(value.new_value))
+  );
+}
+
+function isModifiedDiffMap(value: unknown): value is Record<number, ComponentDiff[]> {
+  if (!isRecord(value)) return false;
+  return Object.entries(value).every(
+    ([entityId, diffs]) => Number.isInteger(Number(entityId))
+      && Array.isArray(diffs)
+      && diffs.every(isComponentDiff),
+  );
+}
+
+function isTickDelta(value: unknown): value is TickDelta {
+  return (
+    isRecord(value)
+    && isNumber(value.tick)
+    && isNumber(value.timestamp)
+    && Array.isArray(value.spawned)
+    && value.spawned.every(isEntitySnapshot)
+    && Array.isArray(value.destroyed)
+    && value.destroyed.every(isNumber)
+    && isModifiedDiffMap(value.modified)
+  );
+}
+
 export function isServerMessage(data: unknown): data is ServerMessage {
   if (!isRecord(data) || !isString(data.type)) return false;
 
   switch (data.type) {
     case "snapshot":
-      return isNumber(data.tick) && isRecord(data.snapshot);
+      return isNumber(data.tick) && isWorldSnapshot(data.snapshot);
     case "delta":
-      return isNumber(data.tick) && isRecord(data.delta);
+      return isNumber(data.tick) && isTickDelta(data.delta);
     case "error":
       return isNumber(data.tick) && isString(data.message);
     case "error_event":

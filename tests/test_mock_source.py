@@ -238,13 +238,29 @@ class TestMockWorldSource:
         finally:
             await source.disconnect()
 
+    async def test_seeded_reconnect_recreates_same_initial_entities(self):
+        source = MockWorldSource(entity_count=5, seed=123)
+
+        await source.connect()
+        try:
+            first_entities = [entity.model_dump() for entity in source._entities]
+        finally:
+            await source.disconnect()
+
+        await source.connect()
+        try:
+            second_entities = [entity.model_dump() for entity in source._entities]
+            assert second_entities == first_entities
+        finally:
+            await source.disconnect()
+
     async def test_error_generation_over_ticks(
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):
         """Over many ticks, error events are generated deterministically."""
-        monkeypatch.setattr(source._rng, "random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             await source.send_command("pause")
             for _ in range(10):
                 await source.send_command("step")
@@ -259,9 +275,9 @@ class TestMockWorldSource:
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):
         """ErrorEventMessages appear in the event subscription stream."""
-        monkeypatch.setattr(source._rng, "random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             errors: list[ErrorEventMessage] = []
 
             async def collect_events():
@@ -279,9 +295,9 @@ class TestMockWorldSource:
 
     async def test_span_generation(self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch):
         """Over many ticks with forced span generation, spans are created."""
-        monkeypatch.setattr(source._rng, "random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             await source.send_command("pause")
             for _ in range(5):
                 await source.send_command("step")
@@ -296,9 +312,9 @@ class TestMockWorldSource:
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):
         """Generated spans have agentecs.tick and agentecs.entity_id attributes."""
-        monkeypatch.setattr(source._rng, "random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             await source.send_command("pause")
             await source.send_command("step")
 
@@ -315,9 +331,9 @@ class TestMockWorldSource:
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):
         """Generated spans form parent-child hierarchy with shared trace_id."""
-        monkeypatch.setattr(source._rng, "random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             await source.send_command("pause")
             await source.send_command("step")
 
@@ -340,9 +356,9 @@ class TestMockWorldSource:
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):
         """SpanEventMessages appear in the event subscription stream."""
-        monkeypatch.setattr(source._rng, "random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             spans: list[SpanEventMessage] = []
 
             async def collect_events():
@@ -361,9 +377,9 @@ class TestMockWorldSource:
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):
         """Each tick generates spans for multiple systems with distinct traces."""
-        monkeypatch.setattr(source._rng, "random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             await source.send_command("pause")
             await source.send_command("step")
 
@@ -389,9 +405,9 @@ class TestMockWorldSource:
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):
         """Systems within the same execution group have overlapping time ranges."""
-        monkeypatch.setattr(source._rng, "random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             await source.send_command("pause")
             await source.send_command("step")
 
