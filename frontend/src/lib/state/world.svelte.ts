@@ -631,10 +631,9 @@ export class WorldState {
   }
 
   private applyDelta(snapshot: WorldSnapshot, delta: TickDelta): WorldSnapshot {
-    const entitiesById = new Map<number, EntitySnapshot>();
-    for (const entity of snapshot.entities) {
-      entitiesById.set(entity.id, this.cloneEntity(entity));
-    }
+    const entitiesById = new Map<number, EntitySnapshot>(
+      snapshot.entities.map((entity) => [entity.id, entity]),
+    );
 
     for (const entityId of delta.destroyed) {
       entitiesById.delete(entityId);
@@ -645,10 +644,11 @@ export class WorldState {
       const entity = entitiesById.get(entityId);
       if (!entity) continue;
 
-      const componentsByType = new Map<string, ComponentSnapshot>();
-      for (const component of entity.components) {
-        componentsByType.set(component.type_short, this.cloneComponent(component));
-      }
+      const componentsByType = new Map<string, ComponentSnapshot>(
+        entity.components.map((component) => [component.type_short, component]),
+      );
+
+      let entityChanged = false;
 
       for (const diff of diffs) {
         if (diff.old_value === null && diff.new_value !== null) {
@@ -657,18 +657,25 @@ export class WorldState {
             type_short: diff.component_type,
             data: this.cloneData(diff.new_value),
           });
+          entityChanged = true;
           continue;
         }
 
         if (diff.new_value === null) {
-          componentsByType.delete(diff.component_type);
+          if (componentsByType.delete(diff.component_type)) {
+            entityChanged = true;
+          }
           continue;
         }
 
         const component = componentsByType.get(diff.component_type);
         const nextData = this.cloneData(diff.new_value);
         if (component) {
-          component.data = nextData;
+          componentsByType.set(diff.component_type, {
+            type_name: component.type_name,
+            type_short: component.type_short,
+            data: nextData,
+          });
         } else {
           componentsByType.set(diff.component_type, {
             type_name: diff.type_name,
@@ -676,12 +683,19 @@ export class WorldState {
             data: nextData,
           });
         }
+        entityChanged = true;
       }
 
-      entity.components = [...componentsByType.values()];
-      entity.archetype = entity.components
-        .map((component) => component.type_short)
-        .sort((a, b) => a.localeCompare(b));
+      if (!entityChanged) continue;
+
+      const components = [...componentsByType.values()];
+      entitiesById.set(entityId, {
+        id: entity.id,
+        archetype: components
+          .map((component) => component.type_short)
+          .sort((a, b) => a.localeCompare(b)),
+        components,
+      });
     }
 
     for (const entity of delta.spawned) {
