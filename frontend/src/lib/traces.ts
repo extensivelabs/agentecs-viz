@@ -205,3 +205,26 @@ export function buildSpanTree(spans: SpanEventMessage[]): SpanTreeNode[] {
 
   return roots;
 }
+
+export function flattenTree(nodes: SpanTreeNode[]): SpanTreeNode[] {
+  const result: SpanTreeNode[] = [];
+
+  function walk(node: SpanTreeNode): void {
+    result.push(node);
+    for (const child of node.children) {
+      walk(child);
+    }
+  }
+
+  for (const node of nodes) {
+    walk(node);
+  }
+
+  return result;
+}
+
+export function formatDuration(ms: number): string {
+  if (ms < 1) return `${(ms * 1000).toFixed(0)}μs`;
+  if (ms < 1000) return `${ms.toFixed(0)}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+}
