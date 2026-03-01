@@ -7,7 +7,7 @@ default_language_version:
 repos:
   # General file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
         exclude: ^(\.agents/|\.reference/)
@@ -25,19 +25,19 @@ repos:
 
   # Ruff - Fast Python linter and formatter
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.0
+    rev: v0.15.4
     hooks:
       # Run the linter
       - id: ruff
         args: [--fix]
-        exclude: ^(tests/|\.agents/|\.reference/)
+        exclude: ^(\.agents/|\.reference/)
       # Run the formatter
       - id: ruff-format
         exclude: ^(\.agents/|\.reference/)
 
   # Mypy - Static type checking
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.10.0
+    rev: v1.19.1
     hooks:
       - id: mypy
         additional_dependencies:
@@ -53,7 +53,7 @@ repos:
 
   # Security checks
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.8
+    rev: 1.9.4
     hooks:
       - id: bandit
         args: ['-c', 'pyproject.toml']

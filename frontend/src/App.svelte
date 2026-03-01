@@ -44,7 +44,7 @@
 
   {#if world.connectionState === "connecting"}
     <div class="flex flex-1 items-center justify-center text-text-muted">
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2" role="status" aria-label="Connecting">
         <svg
           class="h-4 w-4 animate-spin text-accent"
           viewBox="0 0 24 24"
@@ -93,6 +93,7 @@
         <button
           class="ml-auto text-sm text-text-muted hover:text-text-secondary"
           onclick={() => (world.lastError = null)}
+          aria-label="Dismiss error"
         >
           dismiss
         </button>

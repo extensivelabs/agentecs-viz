@@ -174,6 +174,7 @@ class MockWorldSource(TickLoopSource):
         archetypes: list[tuple[str, ...]] | None = None,
         visualization_config: VisualizationConfig | None = None,
         max_history_ticks: int = 1000,
+        seed: int | None = None,
     ) -> None:
         if visualization_config is None:
             visualization_config = _default_config()
@@ -184,7 +185,9 @@ class MockWorldSource(TickLoopSource):
         )
         self._entity_count = entity_count
         self._archetypes = archetypes or _default_archetypes()
+        self._rng = random.Random(seed)
         self._tick = 0
+        self._next_entity_id = 0
         self._entities: list[EntitySnapshot] = []
         self._history = InMemoryHistoryStore(
             max_ticks=max_history_ticks,
@@ -205,6 +208,7 @@ class MockWorldSource(TickLoopSource):
 
     async def _on_connect(self) -> None:
         self._tick = 0
+        self._next_entity_id = 0
         self._paused = False
         self._history.clear()
         self._entities = self._generate_entities()
@@ -245,9 +249,9 @@ class MockWorldSource(TickLoopSource):
         self._history.record_tick(snapshot)
         await self._emit_event(SnapshotMessage(tick=self._tick, snapshot=snapshot))
 
-        if self._entities and random.random() < ERROR_PROBABILITY:
-            entity = random.choice(self._entities)
-            message, severity = random.choice(ERROR_TEMPLATES)
+        if self._entities and self._rng.random() < ERROR_PROBABILITY:
+            entity = self._rng.choice(self._entities)
+            message, severity = self._rng.choice(ERROR_TEMPLATES)
             error = ErrorEventMessage(
                 tick=self._tick,
                 entity_id=entity.id,
@@ -270,10 +274,11 @@ class MockWorldSource(TickLoopSource):
 
     def _generate_entities(self) -> list[EntitySnapshot]:
         entities = []
-        for i in range(self._entity_count):
-            archetype_template = random.choice(self._archetypes)
+        for _ in range(self._entity_count):
+            archetype_template = self._rng.choice(self._archetypes)
             components = [self._generate_component(comp_type) for comp_type in archetype_template]
-            entities.append(EntitySnapshot(id=i, components=components))
+            entities.append(EntitySnapshot(id=self._next_entity_id, components=components))
+            self._next_entity_id += 1
         return entities
 
     def _generate_component(self, type_name: str) -> ComponentSnapshot:
@@ -285,25 +290,31 @@ class MockWorldSource(TickLoopSource):
 
     def _mock_component_data(self, type_name: str) -> dict[str, Any]:
         generators: dict[str, Any] = {
-            "Position": lambda: {"x": random.uniform(-100, 100), "y": random.uniform(-100, 100)},
-            "Velocity": lambda: {"dx": random.uniform(-5, 5), "dy": random.uniform(-5, 5)},
+            "Position": lambda: {
+                "x": self._rng.uniform(-100, 100),
+                "y": self._rng.uniform(-100, 100),
+            },
+            "Velocity": lambda: {
+                "dx": self._rng.uniform(-5, 5),
+                "dy": self._rng.uniform(-5, 5),
+            },
             "Agent": lambda: {
-                "name": f"Agent_{random.randint(1, 100)}",
-                "state": random.choice(["idle", "working", "waiting"]),
+                "name": f"Agent_{self._rng.randint(1, 100)}",
+                "state": self._rng.choice(["idle", "working", "waiting"]),
             },
             "Task": lambda: {
-                "description": f"Task {random.randint(1, 1000)}",
-                "status": random.choice(["pending", "in_progress", "completed"]),
+                "description": f"Task {self._rng.randint(1, 1000)}",
+                "status": self._rng.choice(["pending", "in_progress", "completed"]),
             },
-            "Priority": lambda: {"level": random.randint(1, 5)},
-            "Deadline": lambda: {"remaining_ticks": random.randint(1, 100)},
-            "Memory": lambda: {"entries": random.randint(0, 50)},
-            "Goals": lambda: {"count": random.randint(1, 5)},
+            "Priority": lambda: {"level": self._rng.randint(1, 5)},
+            "Deadline": lambda: {"remaining_ticks": self._rng.randint(1, 100)},
+            "Memory": lambda: {"entries": self._rng.randint(0, 50)},
+            "Goals": lambda: {"count": self._rng.randint(1, 5)},
         }
         gen = generators.get(type_name)
         if gen:
             return gen()  # type: ignore[no-any-return]
-        return {"value": random.random()}
+        return {"value": self._rng.random()}
 
     async def _generate_spans(self) -> None:
         """Generate spans for all systems in execution group order.
@@ -326,16 +337,16 @@ class MockWorldSource(TickLoopSource):
             group_end = group_start
 
             for system_name in group:
-                entity = random.choice(agent_entities)
+                entity = self._rng.choice(agent_entities)
                 trace_id = uuid.uuid4().hex
                 root_span_id = uuid.uuid4().hex
                 # Parallel systems start at roughly the same time
-                sys_start = group_start + random.uniform(0, 0.005)
+                sys_start = group_start + self._rng.uniform(0, 0.005)
 
                 if system_name in COMPLEX_SYSTEMS:
                     children: list[SpanEventMessage] = []
-                    child_cursor = sys_start + random.uniform(0.005, 0.02)
-                    roll = random.random()
+                    child_cursor = sys_start + self._rng.uniform(0.005, 0.02)
+                    roll = self._rng.random()
                     if roll < 0.50:
                         child_cursor = self._generate_child_spans(
                             children,
@@ -343,7 +354,7 @@ class MockWorldSource(TickLoopSource):
                             root_span_id,
                             entity.id,
                             child_cursor,
-                            random.randint(1, 3),
+                            self._rng.randint(1, 3),
                             depth=0,
                         )
                     elif roll < 0.80:
@@ -353,7 +364,7 @@ class MockWorldSource(TickLoopSource):
                             root_span_id,
                             entity.id,
                             child_cursor,
-                            random.randint(3, 5),
+                            self._rng.randint(3, 5),
                             depth=0,
                         )
                     else:
@@ -368,7 +379,7 @@ class MockWorldSource(TickLoopSource):
                     has_error = any(s.status == SpanStatus.error for s in children)
                     all_spans.extend(children)
                 else:
-                    sys_duration = random.uniform(0.005, 0.04)
+                    sys_duration = self._rng.uniform(0.005, 0.04)
                     has_error = False
 
                 root_span = SpanEventMessage(
@@ -387,7 +398,7 @@ class MockWorldSource(TickLoopSource):
                 all_spans.append(root_span)
                 group_end = max(group_end, sys_start + sys_duration)
 
-            cursor = group_end + random.uniform(0.005, 0.015)
+            cursor = group_end + self._rng.uniform(0.005, 0.015)
 
         for span in all_spans:
             self._history.record_span(span)
@@ -401,7 +412,7 @@ class MockWorldSource(TickLoopSource):
         start: float,
         duration: float,
     ) -> SpanEventMessage:
-        profile = random.choice(LLM_PROFILES)
+        profile = self._rng.choice(LLM_PROFILES)
         return SpanEventMessage(
             span_id=uuid.uuid4().hex,
             trace_id=trace_id,
@@ -409,13 +420,15 @@ class MockWorldSource(TickLoopSource):
             name=f"llm.{profile.model}",
             start_time=start,
             end_time=start + duration,
-            status=SpanStatus.error if random.random() < 0.08 else SpanStatus.ok,
+            status=SpanStatus.error if self._rng.random() < 0.08 else SpanStatus.ok,
             attributes={
                 "agentecs.tick": self._tick,
                 "agentecs.entity_id": entity_id,
                 "gen_ai.request.model": profile.model,
-                "gen_ai.usage.prompt_tokens": random.randint(*profile.prompt_token_range),
-                "gen_ai.usage.completion_tokens": random.randint(*profile.completion_token_range),
+                "gen_ai.usage.prompt_tokens": self._rng.randint(*profile.prompt_token_range),
+                "gen_ai.usage.completion_tokens": self._rng.randint(
+                    *profile.completion_token_range
+                ),
                 "gen_ai.request.messages": profile.input_messages,
                 "gen_ai.response.messages": profile.output_messages,
             },
@@ -429,7 +442,7 @@ class MockWorldSource(TickLoopSource):
         start: float,
         duration: float,
     ) -> SpanEventMessage:
-        tool_name, tool_input, tool_output = random.choice(TOOL_TEMPLATES)
+        tool_name, tool_input, tool_output = self._rng.choice(TOOL_TEMPLATES)
         return SpanEventMessage(
             span_id=uuid.uuid4().hex,
             trace_id=trace_id,
@@ -437,7 +450,7 @@ class MockWorldSource(TickLoopSource):
             name=f"tool.{tool_name}",
             start_time=start,
             end_time=start + duration,
-            status=SpanStatus.error if random.random() < 0.1 else SpanStatus.ok,
+            status=SpanStatus.error if self._rng.random() < 0.1 else SpanStatus.ok,
             attributes={
                 "agentecs.tick": self._tick,
                 "agentecs.entity_id": entity_id,
@@ -459,15 +472,15 @@ class MockWorldSource(TickLoopSource):
     ) -> float:
         """Generate a flat sequence of child spans under parent_id."""
         for _ in range(count):
-            is_llm = random.random() < 0.6
-            duration = random.uniform(0.02, 0.15) if depth > 0 else random.uniform(0.05, 0.5)
+            is_llm = self._rng.random() < 0.6
+            duration = self._rng.uniform(0.02, 0.15) if depth > 0 else self._rng.uniform(0.05, 0.5)
 
             if is_llm:
                 span = self._make_llm_span(trace_id, parent_id, entity_id, cursor, duration)
             else:
                 span = self._make_tool_span(trace_id, parent_id, entity_id, cursor, duration)
             spans.append(span)
-            cursor = span.end_time + random.uniform(0.005, 0.03)
+            cursor = span.end_time + self._rng.uniform(0.005, 0.03)
         return cursor
 
     def _generate_deep_trace(
@@ -480,40 +493,39 @@ class MockWorldSource(TickLoopSource):
     ) -> float:
         """Generate a deeper trace: LLM -> tool -> (optional retry LLM) -> tool chain."""
         # Initial LLM call
-        llm_dur = random.uniform(0.3, 1.2)
+        llm_dur = self._rng.uniform(0.3, 1.2)
         llm = self._make_llm_span(trace_id, parent_id, entity_id, cursor, llm_dur)
         spans.append(llm)
-        cursor = llm.end_time + random.uniform(0.01, 0.03)
+        cursor = llm.end_time + self._rng.uniform(0.01, 0.03)
 
         # Tool calls parented under the initial LLM span
-        tool_count = random.randint(1, 3)
+        tool_count = self._rng.randint(1, 3)
         for i in range(tool_count):
-            tool_dur = random.uniform(0.1, 0.6)
+            tool_dur = self._rng.uniform(0.1, 0.6)
             tool = self._make_tool_span(trace_id, llm.span_id, entity_id, cursor, tool_dur)
             spans.append(tool)
 
             # Occasional sub-call within a tool (depth 3)
-            if random.random() < 0.3:
+            if self._rng.random() < 0.3:
                 sub_start = tool.start_time + tool_dur * 0.2
                 sub_dur = tool_dur * 0.5
                 sub = self._make_llm_span(trace_id, tool.span_id, entity_id, sub_start, sub_dur)
                 spans.append(sub)
 
-            cursor = tool.end_time + random.uniform(0.01, 0.04)
+            cursor = tool.end_time + self._rng.uniform(0.01, 0.04)
 
             # Retry pattern: tool failed -> retry with new LLM call -> tool again
             if tool.status == SpanStatus.error and i < tool_count - 1:
-                retry_llm_dur = random.uniform(0.1, 0.4)
+                retry_llm_dur = self._rng.uniform(0.1, 0.4)
                 retry_llm = self._make_llm_span(
                     trace_id,
                     parent_id,
                     entity_id,
                     cursor,
                     retry_llm_dur,
-                )
-                retry_llm.status = SpanStatus.ok
+                ).model_copy(update={"status": SpanStatus.ok})
                 spans.append(retry_llm)
-                cursor = retry_llm.end_time + random.uniform(0.01, 0.03)
+                cursor = retry_llm.end_time + self._rng.uniform(0.01, 0.03)
 
         return cursor
 
@@ -535,13 +547,14 @@ class MockWorldSource(TickLoopSource):
 
             if "Task" in comp_by_type:
                 task = comp_by_type["Task"]
-                if random.random() < TASK_COMPLETION_PROBABILITY:
+                if self._rng.random() < TASK_COMPLETION_PROBABILITY:
                     task.data["status"] = "completed"
 
         max_entities = self._entity_count * MAX_ENTITY_MULTIPLIER
-        if random.random() < ENTITY_SPAWN_PROBABILITY and len(self._entities) < max_entities:
-            new_id = max(e.id for e in self._entities) + 1 if self._entities else 0
-            archetype_template = random.choice(self._archetypes)
+        if self._rng.random() < ENTITY_SPAWN_PROBABILITY and len(self._entities) < max_entities:
+            new_id = self._next_entity_id
+            self._next_entity_id += 1
+            archetype_template = self._rng.choice(self._archetypes)
             self._entities.append(
                 EntitySnapshot(
                     id=new_id,
@@ -549,5 +562,8 @@ class MockWorldSource(TickLoopSource):
                 )
             )
 
-        if random.random() < ENTITY_DESPAWN_PROBABILITY and len(self._entities) > MIN_ENTITY_COUNT:
-            self._entities.pop(random.randrange(len(self._entities)))
+        if (
+            self._rng.random() < ENTITY_DESPAWN_PROBABILITY
+            and len(self._entities) > MIN_ENTITY_COUNT
+        ):
+            self._entities.pop(self._rng.randrange(len(self._entities)))

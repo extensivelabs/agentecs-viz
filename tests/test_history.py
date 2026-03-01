@@ -112,6 +112,35 @@ class TestApplyDelta:
         ids = {e.id for e in reconstructed.entities}
         assert ids == {1, 3}
 
+    def test_apply_modify_missing_entity_is_ignored(self):
+        snap = make_snapshot(0, [make_entity(1, Position={"x": 0})])
+        diff = ComponentDiff(
+            component_type="Position",
+            type_name="m.Position",
+            old_value={"x": 0},
+            new_value={"x": 99},
+        )
+        td = TickDelta(tick=1, timestamp=1.0, modified={999: [diff]})
+
+        result = _apply_delta(snap, td)
+        assert len(result.entities) == 1
+        assert result.entities[0].id == 1
+
+    def test_apply_modify_missing_component_creates_component(self):
+        snap = make_snapshot(0, [make_entity(1, Position={"x": 0})])
+        diff = ComponentDiff(
+            component_type="Health",
+            type_name="m.Health",
+            old_value={"hp": 10},
+            new_value={"hp": 8},
+        )
+        td = TickDelta(tick=1, timestamp=1.0, modified={1: [diff]})
+
+        result = _apply_delta(snap, td)
+        comps = {c.type_short: c for c in result.entities[0].components}
+        assert comps["Health"].type_name == "m.Health"
+        assert comps["Health"].data == {"hp": 8}
+
     def test_type_name_preserved_in_diff(self):
         """ComponentDiff stores full type_name from source component."""
         old = make_entity(1, Position={"x": 0})
@@ -220,6 +249,13 @@ class TestInMemoryHistoryStore:
         for i in range(5):
             store.record_tick(make_snapshot(i, [make_entity(1, A={"v": i})]))
         assert list(store.stored_ticks) == [0, 1, 2, 3, 4]
+
+    def test_duplicate_tick_is_ignored(self):
+        store = InMemoryHistoryStore(max_ticks=100, checkpoint_interval=10)
+        snap = make_snapshot(1, [make_entity(1, A={"v": 1})])
+        store.record_tick(snap)
+        store.record_tick(snap)
+        assert list(store.stored_ticks) == [1]
 
     def test_eviction_retains_latest_ticks(self):
         """After exceeding max_ticks, store retains only the most recent ticks."""
@@ -421,3 +457,43 @@ class TestSpanStorage:
         store.record_span(self._make_span(0, 1))
         store.clear()
         assert store.get_spans(0, 0) == []
+
+    def test_record_span_accepts_string_tick(self):
+        store = InMemoryHistoryStore()
+        store.record_tick(make_snapshot(5, [make_entity(1, A={})]))
+        span = SpanEventMessage(
+            span_id="s1",
+            trace_id="t1",
+            name="string tick",
+            start_time=1.0,
+            end_time=1.5,
+            status=SpanStatus.ok,
+            attributes={"agentecs.tick": "5", "agentecs.entity_id": 1},
+        )
+        store.record_span(span)
+
+        spans = store.get_spans(5, 5)
+        assert len(spans) == 1
+        assert spans[0].span_id == "s1"
+
+    def test_record_span_invalid_tick_falls_back_to_zero(self, caplog):
+        import logging
+
+        caplog.set_level(logging.WARNING)
+        store = InMemoryHistoryStore()
+        store.record_tick(make_snapshot(0, [make_entity(1, A={})]))
+        span = SpanEventMessage(
+            span_id="s_invalid",
+            trace_id="t1",
+            name="invalid tick",
+            start_time=1.0,
+            end_time=1.5,
+            status=SpanStatus.ok,
+            attributes={"agentecs.tick": "not-a-number", "agentecs.entity_id": 1},
+        )
+        store.record_span(span)
+
+        spans = store.get_spans(0, 0)
+        assert len(spans) == 1
+        assert spans[0].span_id == "s_invalid"
+        assert "Invalid span tick" in caplog.text

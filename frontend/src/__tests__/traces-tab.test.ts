@@ -54,9 +54,14 @@ describe("TracesTab", () => {
     sendSpan(2, 2, { name: "tool.search", span_id: "s2" });
 
     render(TracesTab);
+    expect(screen.getByRole("radiogroup", { name: "Traces view mode" })).toBeDefined();
+    expect(screen.getByRole("radio", { name: "List" }).getAttribute("aria-checked")).toBe("true");
     expect(screen.getAllByTestId("span-row").length).toBe(2);
 
     await fireEvent.click(screen.getByTestId("traces-view-timeline"));
+    expect(screen.getByRole("radio", { name: "Timeline" }).getAttribute("aria-checked")).toBe(
+      "true",
+    );
     expect(screen.getByTestId("timeline-view")).toBeDefined();
     expect(screen.getByTestId("tick-timeline")).toBeDefined();
 

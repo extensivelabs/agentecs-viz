@@ -224,6 +224,7 @@
     const graphics = new Graphics();
     graphics.eventMode = "static";
     graphics.cursor = "pointer";
+    graphics.cullable = true;
 
     const state: EntityVisualState = {
       graphics,
@@ -379,6 +380,7 @@
           fontFamily: "monospace",
         }),
       });
+      state.label.cullable = true;
       state.label.anchor.set(0.5, -0.5);
       viewport?.addChild(state.label);
     }
@@ -409,6 +411,7 @@
           fontFamily: "monospace",
         }),
       });
+      state.badge.cullable = true;
       state.badge.anchor.set(0, 1);
       viewport?.addChild(state.badge);
     }
@@ -605,6 +608,45 @@
     if (mode === layoutMode) return;
     layoutMode = mode;
     lastLayoutEntities = null;
+  }
+
+  function selectAdjacentEntity(direction: 1 | -1): void {
+    const entityIds = [...entityVisualStates.keys()].sort((a, b) => a - b);
+    if (entityIds.length === 0) return;
+
+    const selectedId = world.selectedEntityId;
+    if (selectedId === null) {
+      world.selectEntity(direction > 0 ? entityIds[0] : entityIds[entityIds.length - 1]);
+      return;
+    }
+
+    const currentIndex = entityIds.indexOf(selectedId);
+    if (currentIndex < 0) {
+      world.selectEntity(direction > 0 ? entityIds[0] : entityIds[entityIds.length - 1]);
+      return;
+    }
+
+    const nextIndex = (currentIndex + direction + entityIds.length) % entityIds.length;
+    world.selectEntity(entityIds[nextIndex]);
+  }
+
+  function handleCanvasKeydown(e: KeyboardEvent): void {
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      e.preventDefault();
+      selectAdjacentEntity(1);
+      return;
+    }
+
+    if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      e.preventDefault();
+      selectAdjacentEntity(-1);
+      return;
+    }
+
+    if (e.key === "Escape") {
+      e.preventDefault();
+      world.selectEntity(null);
+    }
   }
 
   onMount(() => {
@@ -907,7 +949,16 @@
 </script>
 
 <div class="relative h-full w-full" data-testid="entity-view">
-  <div bind:this={containerEl} class="h-full w-full"></div>
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <div
+    bind:this={containerEl}
+    class="h-full w-full"
+    tabindex="0"
+    role="application"
+    aria-label="Entity canvas. Use arrow keys to move selection and Escape to clear selection."
+    onkeydown={handleCanvasKeydown}
+  ></div>
 
   <div class="absolute right-3 top-3 flex items-center gap-3 text-sm">
     <div class="flex items-center gap-1 rounded bg-bg-secondary/90 px-2.5 py-1.5" data-testid="layout-mode-toggle">

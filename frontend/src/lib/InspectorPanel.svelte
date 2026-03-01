@@ -82,7 +82,7 @@
 </script>
 
 <aside
-  class="flex h-full w-[360px] shrink-0 flex-col border-l border-bg-tertiary bg-bg-secondary"
+  class="flex h-full w-1/4 min-w-[280px] max-w-[420px] shrink-0 flex-col border-l border-bg-tertiary bg-bg-secondary"
   data-testid="inspector-panel"
 >
   {#if entity}

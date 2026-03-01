@@ -218,7 +218,18 @@ class InMemoryHistoryStore:
     def record_span(self, span: SpanEventMessage) -> None:
         """Record a span event at its tick (from attributes)."""
         raw_tick = span.attributes.get("agentecs.tick", 0)
-        tick = int(raw_tick) if isinstance(raw_tick, int | float) else 0
+        tick = 0
+        if isinstance(raw_tick, bool):
+            logger.warning("Invalid span tick %r; recording at tick 0", raw_tick)
+        elif isinstance(raw_tick, int | float):
+            tick = int(raw_tick)
+        elif isinstance(raw_tick, str):
+            try:
+                tick = int(raw_tick)
+            except ValueError:
+                logger.warning("Invalid span tick %r; recording at tick 0", raw_tick)
+        else:
+            logger.warning("Invalid span tick %r; recording at tick 0", raw_tick)
         self._spans.setdefault(tick, []).append(span)
 
     def get_spans(self, start_tick: int, end_tick: int) -> list[SpanEventMessage]:
@@ -283,11 +294,10 @@ class InMemoryHistoryStore:
         checkpoint_tick = self._checkpoint_ticks[idx]
 
         snapshot = self._checkpoints[checkpoint_tick].model_copy(deep=True)
-        for t in self._tick_order:
-            if t <= checkpoint_tick:
-                continue
-            if t > tick:
-                break
+        ticks = self.stored_ticks
+        start_idx = bisect.bisect_right(ticks, checkpoint_tick)
+        end_idx = bisect.bisect_right(ticks, tick)
+        for t in ticks[start_idx:end_idx]:
             if t in self._deltas:
                 snapshot = _apply_delta(snapshot, self._deltas[t])
 

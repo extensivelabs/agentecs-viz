@@ -1,11 +1,11 @@
 """Hatch build hook to bundle frontend dist into the wheel.
 
-This hook copies the built frontend from viz/frontend/dist into the package
+This hook copies the built frontend from frontend/dist into the package
 at src/agentecs_viz/frontend/ during wheel build, enabling seamless
 `pip install agentecs-viz && agentecs-viz serve` experience.
 
 The frontend must be pre-built before running `uv build` or `pip wheel`.
-Use `task frontend:build` or `npm run build` in viz/frontend/ first.
+Use `task frontend:build` or `npm run build` in frontend/ first.
 """
 
 from __future__ import annotations

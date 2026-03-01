@@ -298,6 +298,40 @@ describe("TimelineBar", () => {
     expect(slider.getAttribute("aria-valuemax")).toBe("10");
   });
 
+  it("pointer up sends final seek even within throttle window", async () => {
+    connectWithHistory(5, 10);
+    render(TimelineBar);
+
+    const seekSpy = vi.spyOn(world, "seek");
+    const slider = screen.getByRole("slider") as HTMLElement;
+    (slider as HTMLElement & { setPointerCapture: (pointerId: number) => void }).setPointerCapture =
+      vi.fn();
+    vi.spyOn(slider, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 10,
+      top: 0,
+      right: 100,
+      bottom: 10,
+      left: 0,
+      toJSON: () => ({}),
+    });
+
+    const nowSpy = vi.spyOn(Date, "now");
+    nowSpy.mockReturnValue(1000);
+    await fireEvent.pointerDown(slider, { pointerId: 1, clientX: 10 });
+
+    nowSpy.mockReturnValue(1010);
+    await fireEvent.pointerMove(slider, { pointerId: 1, clientX: 90 });
+
+    nowSpy.mockReturnValue(1020);
+    await fireEvent.pointerUp(slider, { pointerId: 1, clientX: 90 });
+
+    expect(seekSpy).toHaveBeenCalledTimes(2);
+    expect(seekSpy).toHaveBeenLastCalledWith(9);
+  });
+
   it("has toolbar role", () => {
     connectWithHistory();
     render(TimelineBar);

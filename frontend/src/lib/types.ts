@@ -1,5 +1,3 @@
-// Data types (mirror snapshot.py)
-
 export interface ComponentSnapshot {
   type_name: string;
   type_short: string;
@@ -23,6 +21,7 @@ export interface WorldSnapshot {
 
 export interface ComponentDiff {
   component_type: string;
+  type_name: string;
   old_value: Record<string, unknown> | null;
   new_value: Record<string, unknown> | null;
 }
@@ -34,8 +33,6 @@ export interface TickDelta {
   destroyed: number[];
   modified: Record<number, ComponentDiff[]>;
 }
-
-// Server → Client messages (mirror protocol.py, discriminated by `type`)
 
 export interface SnapshotMessage {
   type: "snapshot";
@@ -104,8 +101,6 @@ export type ServerMessage =
   | TickUpdateMessage
   | MetadataMessage;
 
-// Client → Server commands (flat format, mirror protocol.py)
-
 export type ClientCommand =
   | { command: "subscribe" }
   | { command: "pause" }
@@ -113,8 +108,6 @@ export type ClientCommand =
   | { command: "step" }
   | { command: "seek"; tick: number }
   | { command: "set_speed"; ticks_per_second: number };
-
-// Config types (mirror config.py)
 
 export interface ArchetypeConfig {
   key: string;
@@ -144,28 +137,88 @@ export interface VisualizationConfig {
   entity_label_template?: string | null;
 }
 
-// Connection state
-
 export type ConnectionState =
   | "disconnected"
   | "connecting"
   | "connected"
   | "error";
 
-// Type guard
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
-const SERVER_MESSAGE_TYPES = new Set([
-  "snapshot",
-  "delta",
-  "error",
-  "error_event",
-  "span_event",
-  "tick_update",
-  "metadata",
-]);
+function isNumber(value: unknown): value is number {
+  return typeof value === "number";
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === "boolean";
+}
+
+function isTickRange(value: unknown): value is [number, number] {
+  return (
+    Array.isArray(value)
+    && value.length === 2
+    && isNumber(value[0])
+    && isNumber(value[1])
+  );
+}
+
+function isSpanStatus(value: unknown): value is SpanStatus {
+  return value === "ok" || value === "error" || value === "unset";
+}
+
+function isErrorSeverity(value: unknown): value is ErrorSeverity {
+  return value === "critical" || value === "warning" || value === "info";
+}
 
 export function isServerMessage(data: unknown): data is ServerMessage {
-  if (typeof data !== "object" || data === null) return false;
-  const obj = data as Record<string, unknown>;
-  return typeof obj.type === "string" && SERVER_MESSAGE_TYPES.has(obj.type);
+  if (!isRecord(data) || !isString(data.type)) return false;
+
+  switch (data.type) {
+    case "snapshot":
+      return isNumber(data.tick) && isRecord(data.snapshot);
+    case "delta":
+      return isNumber(data.tick) && isRecord(data.delta);
+    case "error":
+      return isNumber(data.tick) && isString(data.message);
+    case "error_event":
+      return (
+        isNumber(data.tick)
+        && isNumber(data.entity_id)
+        && isString(data.message)
+        && isErrorSeverity(data.severity)
+      );
+    case "span_event":
+      return (
+        isString(data.span_id)
+        && isString(data.trace_id)
+        && (data.parent_span_id === null || isString(data.parent_span_id))
+        && isString(data.name)
+        && isNumber(data.start_time)
+        && isNumber(data.end_time)
+        && isSpanStatus(data.status)
+        && isRecord(data.attributes)
+      );
+    case "tick_update":
+      return (
+        isNumber(data.tick)
+        && isNumber(data.entity_count)
+        && isBoolean(data.is_paused)
+      );
+    case "metadata":
+      return (
+        isNumber(data.tick)
+        && (data.config === null || isRecord(data.config))
+        && (data.tick_range === null || isTickRange(data.tick_range))
+        && isBoolean(data.supports_history)
+        && isBoolean(data.is_paused)
+      );
+    default:
+      return false;
+  }
 }

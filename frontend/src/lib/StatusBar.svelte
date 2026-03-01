@@ -1,12 +1,6 @@
 <script lang="ts">
+  import { PLAYBACK_MODE_TEXT_CLASS } from "./config";
   import { world } from "./state/world.svelte";
-
-  const modeColors: Record<string, string> = {
-    live: "text-success",
-    paused: "text-warning",
-    history: "text-accent",
-    replay: "text-accent",
-  };
 
   let lastTimestamp = $derived(
     world.snapshot?.timestamp != null
@@ -25,7 +19,7 @@
       <span>{lastTimestamp}</span>
     {/if}
     {#if world.isConnected}
-      <span class={modeColors[world.playbackMode] ?? "text-text-muted"}>
+      <span class={PLAYBACK_MODE_TEXT_CLASS[world.playbackMode] ?? "text-text-muted"}>
         {world.playbackMode.toUpperCase()}
       </span>
     {/if}

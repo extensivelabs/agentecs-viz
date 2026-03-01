@@ -12,7 +12,7 @@
 
   function commitTick() {
     const value = tickInputValue.trim();
-    if (!/^-?\d+$/.test(value)) {
+    if (!/^\d+$/.test(value)) {
       isEditingTick = false;
       return;
     }
@@ -108,6 +108,8 @@
       class:bg-warning={world.connectionState === "connecting"}
       class:bg-error={world.connectionState === "error"}
       class:bg-text-muted={world.connectionState === "disconnected"}
+      role="img"
+      aria-label={`Connection status: ${world.connectionState}`}
     ></span>
     <span class="text-sm text-text-muted">{world.connectionState}</span>
   </div>

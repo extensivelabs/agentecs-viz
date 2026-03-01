@@ -134,6 +134,11 @@ def create_app(
                 [receive_task, send_task],
                 return_when=asyncio.FIRST_COMPLETED,
             )
+
+            for task in done:
+                with suppress(asyncio.CancelledError):
+                    task.result()
+
             for task in pending:
                 task.cancel()
                 with suppress(asyncio.CancelledError):

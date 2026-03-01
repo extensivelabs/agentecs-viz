@@ -18,6 +18,7 @@ describe("App", () => {
   it("renders and shows connecting state", () => {
     render(App);
     expect(screen.getByText("Connecting...")).toBeTruthy();
+    expect(screen.getByRole("status", { name: "Connecting" })).toBeTruthy();
   });
 
   it("shows connected UI with tabs after connection", async () => {
@@ -188,5 +189,49 @@ describe("App", () => {
     });
 
     expect(screen.getByText("Retry")).toBeTruthy();
+  });
+
+  it("renders dismiss button with aria label when server error is shown", async () => {
+    render(App);
+
+    const ws = MockWebSocket.instances[0];
+    ws.simulateOpen();
+    ws.simulateMessage({
+      type: "metadata",
+      tick: 0,
+      config: {
+        world_name: "Test",
+        archetypes: [],
+        component_metrics: [],
+        field_hints: { status_fields: [], error_fields: [] },
+        chat_enabled: false,
+        entity_label_template: null,
+        color_palette: null,
+      },
+      tick_range: [0, 1],
+      supports_history: false,
+      is_paused: false,
+    });
+    ws.simulateMessage({
+      type: "snapshot",
+      tick: 1,
+      snapshot: {
+        tick: 1,
+        timestamp: Date.now() / 1000,
+        entity_count: 0,
+        entities: [],
+        archetypes: [],
+        metadata: {},
+      },
+    });
+    ws.simulateMessage({
+      type: "error",
+      tick: 1,
+      message: "boom",
+    });
+
+    await vi.waitFor(() => {
+      expect(screen.getByLabelText("Dismiss error")).toBeTruthy();
+    });
   });
 });

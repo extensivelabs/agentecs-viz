@@ -19,6 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Typing :: Typed",
 ]
 dependencies = [
@@ -99,7 +100,7 @@ convention = "google"
 python_version = "3.11"
 strict = true
 warn_return_any = true
-warn_unused_ignores = false
+warn_unused_ignores = true
 disable_error_code = ["import-untyped"]
 
 [[tool.mypy.overrides]]

@@ -1,4 +1,8 @@
-import { TOKEN_COST_BUDGET_USD, WS_URL } from "../config";
+import {
+  TOKEN_COST_BUDGET_USD,
+  WS_URL,
+  type PlaybackMode,
+} from "../config";
 import { diffEntity, type EntityDiff } from "../diff";
 import {
   getAvailableComponents as queryAvailableComponents,
@@ -8,18 +12,18 @@ import {
 import { aggregateSpanUsage, type ModelUsageTotals, type SpanUsageTotals } from "../traces";
 import type {
   ArchetypeConfig,
+  ComponentSnapshot,
   ConnectionState,
   EntitySnapshot,
   ErrorEventMessage,
   ServerMessage,
   SpanEventMessage,
+  TickDelta,
   VisualizationConfig,
   WorldSnapshot,
 } from "../types";
 import { entityHash } from "../utils";
 import { WebSocketClient } from "../websocket";
-
-export type PlaybackMode = "live" | "paused" | "history" | "replay";
 
 type AggregatedSpanUsage = {
   totals: SpanUsageTotals;
@@ -72,6 +76,9 @@ export class WorldState {
   private entityHashes = new Map<number, string>();
   private replayTimer: ReturnType<typeof setInterval> | null = null;
   private currentSpeed: number = 1;
+  private spanUsageCacheSpans: SpanEventMessage[] = [];
+  private spanUsageCacheByTick = new Map<number, AggregatedSpanUsage>();
+  private spanUsageCacheTimeline: SpanUsageFrame[] = [];
 
   tick: number = $derived(this.snapshot?.tick ?? 0);
   entityCount: number = $derived(this.snapshot?.entity_count ?? 0);
@@ -164,62 +171,9 @@ export class WorldState {
 
   spanCount: number = $derived(this.visibleSpans.length);
 
-  private spanUsageTimeline: SpanUsageFrame[] = $derived.by(() => {
-    const spansByTick = new Map<number, SpanEventMessage[]>();
-    for (const span of this.spans) {
-      const tick = span.attributes["agentecs.tick"];
-      if (typeof tick !== "number") continue;
-      const atTick = spansByTick.get(tick);
-      if (atTick) {
-        atTick.push(span);
-      } else {
-        spansByTick.set(tick, [span]);
-      }
-    }
-
-    const ticks = [...spansByTick.keys()].sort((a, b) => a - b);
-    const timeline: SpanUsageFrame[] = [];
-    const runningTotals: SpanUsageTotals = {
-      prompt: 0,
-      completion: 0,
-      total: 0,
-      costUsd: 0,
-    };
-    const runningByModel = new Map<string, ModelUsageTotals>();
-
-    for (const tick of ticks) {
-      const usageAtTick = aggregateSpanUsage(spansByTick.get(tick) ?? []);
-      runningTotals.prompt += usageAtTick.totals.prompt;
-      runningTotals.completion += usageAtTick.totals.completion;
-      runningTotals.total += usageAtTick.totals.total;
-      runningTotals.costUsd += usageAtTick.totals.costUsd;
-
-      for (const modelUsage of usageAtTick.byModel) {
-        const current = runningByModel.get(modelUsage.model) ?? {
-          model: modelUsage.model,
-          prompt: 0,
-          completion: 0,
-          total: 0,
-          costUsd: 0,
-        };
-        current.prompt += modelUsage.prompt;
-        current.completion += modelUsage.completion;
-        current.total += modelUsage.total;
-        current.costUsd += modelUsage.costUsd;
-        runningByModel.set(modelUsage.model, current);
-      }
-
-      timeline.push({
-        tick,
-        usage: {
-          totals: { ...runningTotals },
-          byModel: [...runningByModel.values()].sort((a, b) => b.costUsd - a.costUsd),
-        },
-      });
-    }
-
-    return timeline;
-  });
+  private spanUsageTimeline: SpanUsageFrame[] = $derived.by(() =>
+    this.getOrBuildSpanUsageTimeline(this.spans),
+  );
 
   spanUsage: AggregatedSpanUsage = $derived.by(() =>
     this.getSpanUsageAtTick(this.tick),
@@ -306,6 +260,145 @@ export class WorldState {
     return diff.totalChanges > 0 ? diff : null;
   });
 
+  private mergeSpanUsage(
+    base: AggregatedSpanUsage,
+    delta: AggregatedSpanUsage,
+  ): AggregatedSpanUsage {
+    const totals: SpanUsageTotals = {
+      prompt: base.totals.prompt + delta.totals.prompt,
+      completion: base.totals.completion + delta.totals.completion,
+      total: base.totals.total + delta.totals.total,
+      costUsd: base.totals.costUsd + delta.totals.costUsd,
+    };
+
+    const byModel = new Map<string, ModelUsageTotals>();
+    const addModelUsage = (usage: ModelUsageTotals): void => {
+      const current = byModel.get(usage.model) ?? {
+        model: usage.model,
+        prompt: 0,
+        completion: 0,
+        total: 0,
+        costUsd: 0,
+      };
+      current.prompt += usage.prompt;
+      current.completion += usage.completion;
+      current.total += usage.total;
+      current.costUsd += usage.costUsd;
+      byModel.set(usage.model, current);
+    };
+
+    for (const usage of base.byModel) {
+      addModelUsage(usage);
+    }
+    for (const usage of delta.byModel) {
+      addModelUsage(usage);
+    }
+
+    return {
+      totals,
+      byModel: [...byModel.values()].sort((a, b) => b.costUsd - a.costUsd),
+    };
+  }
+
+  private rebuildSpanUsageTimelineFromTickUsage(): void {
+    const timeline: SpanUsageFrame[] = [];
+    let cumulative: AggregatedSpanUsage = EMPTY_SPAN_USAGE;
+
+    const ticks = [...this.spanUsageCacheByTick.keys()].sort((a, b) => a - b);
+    for (const tick of ticks) {
+      const tickUsage = this.spanUsageCacheByTick.get(tick) ?? EMPTY_SPAN_USAGE;
+      cumulative = this.mergeSpanUsage(cumulative, tickUsage);
+      timeline.push({ tick, usage: cumulative });
+    }
+
+    this.spanUsageCacheTimeline = timeline;
+  }
+
+  private rebuildSpanUsageCache(spans: SpanEventMessage[]): void {
+    const byTick = new Map<number, AggregatedSpanUsage>();
+    for (const span of spans) {
+      const tick = span.attributes["agentecs.tick"];
+      if (typeof tick !== "number") continue;
+
+      const spanUsage = aggregateSpanUsage([span]);
+      const existing = byTick.get(tick) ?? EMPTY_SPAN_USAGE;
+      byTick.set(tick, this.mergeSpanUsage(existing, spanUsage));
+    }
+
+    this.spanUsageCacheByTick = byTick;
+    this.rebuildSpanUsageTimelineFromTickUsage();
+  }
+
+  private appendSpanUsage(span: SpanEventMessage): void {
+    const tick = span.attributes["agentecs.tick"];
+    if (typeof tick !== "number") return;
+
+    const spanUsage = aggregateSpanUsage([span]);
+    const existingTickUsage = this.spanUsageCacheByTick.get(tick) ?? EMPTY_SPAN_USAGE;
+    const mergedTickUsage = this.mergeSpanUsage(existingTickUsage, spanUsage);
+    this.spanUsageCacheByTick.set(tick, mergedTickUsage);
+
+    const timeline = this.spanUsageCacheTimeline;
+    if (timeline.length === 0) {
+      this.spanUsageCacheTimeline = [{ tick, usage: mergedTickUsage }];
+      return;
+    }
+
+    const lastIndex = timeline.length - 1;
+    const lastFrame = timeline[lastIndex];
+
+    if (tick > lastFrame.tick) {
+      this.spanUsageCacheTimeline = [
+        ...timeline,
+        { tick, usage: this.mergeSpanUsage(lastFrame.usage, mergedTickUsage) },
+      ];
+      return;
+    }
+
+    if (tick === lastFrame.tick) {
+      const nextTimeline = [...timeline];
+      nextTimeline[lastIndex] = {
+        tick,
+        usage: this.mergeSpanUsage(lastFrame.usage, spanUsage),
+      };
+      this.spanUsageCacheTimeline = nextTimeline;
+      return;
+    }
+
+    this.rebuildSpanUsageTimelineFromTickUsage();
+  }
+
+  private getOrBuildSpanUsageTimeline(spans: SpanEventMessage[]): SpanUsageFrame[] {
+    if (spans.length === 0) {
+      this.spanUsageCacheSpans = [];
+      this.spanUsageCacheByTick = new Map<number, AggregatedSpanUsage>();
+      this.spanUsageCacheTimeline = [];
+      return this.spanUsageCacheTimeline;
+    }
+
+    const previousSpans = this.spanUsageCacheSpans;
+    const isAppendOnly = (
+      spans.length === previousSpans.length + 1
+      && (
+        previousSpans.length === 0
+        || spans[previousSpans.length - 1] === previousSpans[previousSpans.length - 1]
+      )
+    );
+
+    if (isAppendOnly) {
+      this.appendSpanUsage(spans[spans.length - 1]);
+      this.spanUsageCacheSpans = spans;
+      return this.spanUsageCacheTimeline;
+    }
+
+    if (spans !== previousSpans) {
+      this.rebuildSpanUsageCache(spans);
+      this.spanUsageCacheSpans = spans;
+    }
+
+    return this.spanUsageCacheTimeline;
+  }
+
   connect(url?: string): void {
     if (this.client) this.disconnect();
     this.resetState();
@@ -349,6 +442,9 @@ export class WorldState {
     this.errors = [];
     this.errorPanelOpen = false;
     this.spans = [];
+    this.spanUsageCacheSpans = [];
+    this.spanUsageCacheByTick = new Map<number, AggregatedSpanUsage>();
+    this.spanUsageCacheTimeline = [];
     this.selectedSpanId = null;
   }
 
@@ -499,6 +595,110 @@ export class WorldState {
     }
   }
 
+  private cloneData(data: Record<string, unknown>): Record<string, unknown> {
+    if (typeof structuredClone === "function") {
+      return structuredClone(data) as Record<string, unknown>;
+    }
+    return JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
+  }
+
+  private cloneComponent(component: ComponentSnapshot): ComponentSnapshot {
+    return {
+      type_name: component.type_name,
+      type_short: component.type_short,
+      data: this.cloneData(component.data),
+    };
+  }
+
+  private cloneEntity(entity: EntitySnapshot): EntitySnapshot {
+    return {
+      id: entity.id,
+      archetype: [...entity.archetype],
+      components: entity.components.map((component) => this.cloneComponent(component)),
+    };
+  }
+
+  private deriveArchetypes(entities: EntitySnapshot[]): string[][] {
+    const archetypes = new Map<string, string[]>();
+    for (const entity of entities) {
+      const normalized = [...entity.archetype].sort();
+      const key = normalized.join("\u0000");
+      if (!archetypes.has(key)) {
+        archetypes.set(key, normalized);
+      }
+    }
+    return [...archetypes.values()].sort((a, b) => a.join(",").localeCompare(b.join(",")));
+  }
+
+  private applyDelta(snapshot: WorldSnapshot, delta: TickDelta): WorldSnapshot {
+    const entitiesById = new Map<number, EntitySnapshot>();
+    for (const entity of snapshot.entities) {
+      entitiesById.set(entity.id, this.cloneEntity(entity));
+    }
+
+    for (const entityId of delta.destroyed) {
+      entitiesById.delete(entityId);
+    }
+
+    for (const [rawEntityId, diffs] of Object.entries(delta.modified)) {
+      const entityId = Number(rawEntityId);
+      const entity = entitiesById.get(entityId);
+      if (!entity) continue;
+
+      const componentsByType = new Map<string, ComponentSnapshot>();
+      for (const component of entity.components) {
+        componentsByType.set(component.type_short, this.cloneComponent(component));
+      }
+
+      for (const diff of diffs) {
+        if (diff.old_value === null && diff.new_value !== null) {
+          componentsByType.set(diff.component_type, {
+            type_name: diff.type_name,
+            type_short: diff.component_type,
+            data: this.cloneData(diff.new_value),
+          });
+          continue;
+        }
+
+        if (diff.new_value === null) {
+          componentsByType.delete(diff.component_type);
+          continue;
+        }
+
+        const component = componentsByType.get(diff.component_type);
+        const nextData = this.cloneData(diff.new_value);
+        if (component) {
+          component.data = nextData;
+        } else {
+          componentsByType.set(diff.component_type, {
+            type_name: diff.type_name,
+            type_short: diff.component_type,
+            data: nextData,
+          });
+        }
+      }
+
+      entity.components = [...componentsByType.values()];
+      entity.archetype = entity.components
+        .map((component) => component.type_short)
+        .sort((a, b) => a.localeCompare(b));
+    }
+
+    for (const entity of delta.spawned) {
+      entitiesById.set(entity.id, this.cloneEntity(entity));
+    }
+
+    const entities = [...entitiesById.values()];
+    return {
+      tick: delta.tick,
+      timestamp: delta.timestamp,
+      entity_count: entities.length,
+      entities,
+      archetypes: this.deriveArchetypes(entities),
+      metadata: snapshot.metadata,
+    };
+  }
+
   private handleMessage(msg: ServerMessage): void {
     switch (msg.type) {
       case "metadata":
@@ -568,11 +768,22 @@ export class WorldState {
       }
 
       case "delta":
-        console.warn(
-          "[world] delta message received but not yet implemented; requesting snapshot resync",
-        );
-        // seek() also pauses playback; resync is preferred to running with stale state.
-        this.client?.seek(msg.tick);
+        if (!this.snapshot) {
+          console.warn("[world] received delta before initial snapshot; ignoring");
+          break;
+        }
+
+        this.previousSnapshot = this.snapshot;
+        this.snapshot = this.applyDelta(this.snapshot, msg.delta);
+        this.updateEntityTracking(this.snapshot);
+        if (this.tickRange) {
+          this.tickRange = [
+            this.tickRange[0],
+            Math.max(this.tickRange[1], this.snapshot.tick),
+          ];
+        } else {
+          this.tickRange = [this.snapshot.tick, this.snapshot.tick];
+        }
         break;
     }
   }

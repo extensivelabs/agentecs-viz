@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/svelte";
+import { render, screen, fireEvent, waitFor } from "@testing-library/svelte";
 import QueryBuilder from "../lib/QueryBuilder.svelte";
 import { world } from "../lib/state/world.svelte";
 import { makeEntity, setWorldState } from "./helpers";
@@ -81,5 +81,24 @@ describe("QueryBuilder", () => {
     await fireEvent.click(screen.getByTestId("saved-query"));
     expect(world.hasActiveFilter).toBe(true);
     expect(world.matchCount).toBe(2);
+  });
+
+  it("updates suggestions when entity components change", async () => {
+    render(QueryBuilder);
+    await fireEvent.click(screen.getByTestId("query-toggle"));
+
+    const input = screen.getByTestId("component-input") as HTMLInputElement;
+    await fireEvent.focus(input);
+    await fireEvent.input(input, { target: { value: "Vel" } });
+    expect(screen.queryByText("Velocity")).toBeNull();
+
+    setWorldState([
+      makeEntity(1, ["Agent", "Position"]),
+      makeEntity(2, ["Velocity"]),
+    ]);
+
+    await waitFor(() => {
+      expect(screen.getByText("Velocity")).toBeTruthy();
+    });
   });
 });
