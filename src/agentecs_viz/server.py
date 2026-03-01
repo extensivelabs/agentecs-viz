@@ -128,19 +128,30 @@ def create_app(
 
         receive_task = asyncio.create_task(receive_commands())
         send_task = asyncio.create_task(send_events())
+        tasks = {receive_task, send_task}
 
         try:
-            done, pending = await asyncio.wait(
-                [receive_task, send_task],
+            done, _ = await asyncio.wait(
+                tasks,
                 return_when=asyncio.FIRST_COMPLETED,
             )
-            for task in pending:
+
+            for task in done:
+                try:
+                    task.result()
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    logger.exception("WebSocket task failed")
+        except Exception:
+            logger.exception("WebSocket wait failed")
+        finally:
+            pending_tasks = [task for task in tasks if not task.done()]
+            for task in pending_tasks:
                 task.cancel()
+            for task in pending_tasks:
                 with suppress(asyncio.CancelledError):
                     await task
-        except Exception as e:
-            logger.error("WebSocket error: %s", e)
-        finally:
             logger.info("WebSocket client disconnected")
 
     return app

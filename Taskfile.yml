@@ -25,6 +25,16 @@ tasks:
     cmds:
       - '{{.RUN}} pytest {{.CLI_ARGS}}'
 
+  coverage:
+    desc: Run tests with coverage report
+    cmds:
+      - '{{.RUN}} pytest --cov={{.SRC_DIR}} --cov-report=term-missing {{.CLI_ARGS}}'
+
+  security:
+    desc: Run Bandit security scan
+    cmds:
+      - '{{.RUN}} bandit -c pyproject.toml -r {{.SRC_DIR}}'
+
   lint:
     desc: Lint and auto-fix code
     cmds:

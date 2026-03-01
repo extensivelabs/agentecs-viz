@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { PLAYBACK_MODE_TEXT_CLASS } from "./config";
   import { world } from "./state/world.svelte";
   import { timeline } from "./state/timeline.svelte";
 
@@ -12,16 +13,9 @@
     replay: "REPLAY",
   };
 
-  const modeColors: Record<string, string> = {
-    live: "text-success",
-    paused: "text-warning",
-    history: "text-accent",
-    replay: "text-accent",
-  };
-
-  function throttledSeek(tick: number) {
+  function throttledSeek(tick: number, force = false) {
     const now = Date.now();
-    if (now - lastSeekTime < 100) return;
+    if (!force && now - lastSeekTime < 100) return;
     lastSeekTime = now;
     const clamped = Math.min(world.maxTick, Math.max(world.minTick, tick));
     world.seek(clamped);
@@ -40,17 +34,20 @@
     seekFromPointer(e);
   }
 
-  function handlePointerUp() {
+  function handlePointerUp(e: PointerEvent) {
+    if (scrubbing) {
+      seekFromPointer(e, true);
+    }
     scrubbing = false;
   }
 
-  function seekFromPointer(e: PointerEvent) {
+  function seekFromPointer(e: PointerEvent, force = false) {
     const track = e.currentTarget as HTMLElement;
     const rect = track.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const range = world.maxTick - world.minTick;
     const tick = Math.round(world.minTick + ratio * range);
-    throttledSeek(tick);
+    throttledSeek(tick, force);
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -179,7 +176,7 @@
     {timeline.playbackSpeed}x
   </button>
 
-  <span class="flex items-center gap-1.5 text-sm font-medium {modeColors[world.playbackMode] ?? 'text-text-muted'}" data-testid="mode-indicator">
+  <span class="flex items-center gap-1.5 text-sm font-medium {PLAYBACK_MODE_TEXT_CLASS[world.playbackMode] ?? 'text-text-muted'}" data-testid="mode-indicator">
     {#if world.playbackMode === "live"}
       <span class="relative flex h-2 w-2">
         <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75"></span>

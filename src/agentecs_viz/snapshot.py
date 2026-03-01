@@ -19,7 +19,7 @@ class EntitySnapshot(BaseModel):
         default_factory=list, description="Component snapshots"
     )
 
-    @computed_field  # type: ignore[misc]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def archetype(self) -> tuple[str, ...]:
         return tuple(sorted(c.type_short for c in self.components))
@@ -31,12 +31,12 @@ class WorldSnapshot(BaseModel):
     entities: list[EntitySnapshot] = Field(default_factory=list, description="All entity snapshots")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Optional world metadata")
 
-    @computed_field  # type: ignore[misc]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def entity_count(self) -> int:
         return len(self.entities)
 
-    @computed_field  # type: ignore[misc]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def archetypes(self) -> list[tuple[str, ...]]:
         return sorted({e.archetype for e in self.entities})

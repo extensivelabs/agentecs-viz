@@ -7,12 +7,9 @@ import importlib
 import logging
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from agentecs_viz._version import __version__
-
-if TYPE_CHECKING:
-    from agentecs_viz.protocol import WorldStateSource
+from agentecs_viz.protocol import WorldStateSource
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +35,22 @@ def load_world_source(module_path: str) -> WorldStateSource:
         raise ImportError(f"Cannot import module '{module_path}': {e}") from e
 
     if hasattr(module, "get_world_source"):
-        return module.get_world_source()  # type: ignore[no-any-return]
+        source = module.get_world_source()
+        if isinstance(source, WorldStateSource):
+            return source
+        raise TypeError(
+            f"Module '{module_path}' returned unsupported source type "
+            f"{type(source).__name__}; expected WorldStateSource"
+        )
 
     if hasattr(module, "world_source"):
-        return module.world_source  # type: ignore[no-any-return]
+        source = module.world_source
+        if isinstance(source, WorldStateSource):
+            return source
+        raise TypeError(
+            f"Module '{module_path}' has unsupported world_source type "
+            f"{type(source).__name__}; expected WorldStateSource"
+        )
 
     raise AttributeError(
         f"Module '{module_path}' must have 'get_world_source()' or 'world_source' attribute"
@@ -119,7 +128,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
         try:
             source = load_world_source(args.world_module)
             logger.info("Loaded world source from '%s'", args.world_module)
-        except (ImportError, AttributeError) as e:
+        except (ImportError, AttributeError, TypeError) as e:
             logger.error(str(e))
             return 1
     elif args.mock:

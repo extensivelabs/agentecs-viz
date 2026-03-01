@@ -220,7 +220,60 @@ describe("WorldState", () => {
       expect(state.lastError).toBe("something broke");
     });
 
-    it("logs warning on delta message", () => {
+    it("applies delta messages to the current snapshot", () => {
+      const ws = MockWebSocket.instances[0];
+      ws.simulateMessage({
+        type: "snapshot",
+        tick: 1,
+        snapshot: makeSnapshot({ tick: 1 }),
+      } satisfies SnapshotMessage);
+
+      const msg: DeltaMessage = {
+        type: "delta",
+        tick: 2,
+        delta: {
+          tick: 2,
+          timestamp: 2,
+          spawned: [
+            {
+              id: 3,
+              archetype: ["Task"],
+              components: [
+                {
+                  type_name: "Task",
+                  type_short: "Task",
+                  data: { status: "pending" },
+                },
+              ],
+            },
+          ],
+          destroyed: [2],
+          modified: {
+            1: [
+              {
+                component_type: "Position",
+                type_name: "Position",
+                old_value: { x: 0, y: 0 },
+                new_value: { x: 12, y: 24 },
+              },
+            ],
+          },
+        },
+      };
+
+      ws.simulateMessage(msg);
+
+      expect(state.tick).toBe(2);
+      expect(state.entities.map((entity) => entity.id)).toEqual([1, 3]);
+      const entity1 = state.entities.find((entity) => entity.id === 1);
+      expect(entity1?.components.find((component) => component.type_short === "Position")?.data).toEqual({
+        x: 12,
+        y: 24,
+      });
+      expect(ws.sentMessages).toEqual([]);
+    });
+
+    it("ignores delta messages received before initial snapshot", () => {
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
       const ws = MockWebSocket.instances[0];
       const msg: DeltaMessage = {
@@ -236,9 +289,9 @@ describe("WorldState", () => {
       };
       ws.simulateMessage(msg);
       expect(warnSpy).toHaveBeenCalledWith(
-        "[world] delta message received but not yet implemented; requesting snapshot resync",
+        "[world] received delta before initial snapshot; ignoring",
       );
-      expect(JSON.parse(ws.sentMessages[0])).toEqual({ command: "seek", tick: 1 });
+      expect(state.snapshot).toBeNull();
     });
 
     it("handles tick_update message", () => {

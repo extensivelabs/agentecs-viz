@@ -184,7 +184,12 @@
       </div>
     {:else}
       <div class="flex items-center justify-between border-b border-bg-tertiary px-4 py-2">
-        <div class="inline-flex items-center rounded bg-bg-tertiary p-0.5" data-testid="traces-view-toggle">
+        <div
+          class="inline-flex items-center rounded bg-bg-tertiary p-0.5"
+          data-testid="traces-view-toggle"
+          role="radiogroup"
+          aria-label="Traces view mode"
+        >
           <button
             class="rounded px-3 py-1 text-sm"
             class:bg-accent={viewMode === "list"}
@@ -193,6 +198,8 @@
             class:hover:text-text-secondary={viewMode !== "list"}
             onclick={() => (viewMode = "list")}
             data-testid="traces-view-list"
+            role="radio"
+            aria-checked={viewMode === "list"}
           >
             List
           </button>
@@ -204,6 +211,8 @@
             class:hover:text-text-secondary={viewMode !== "timeline"}
             onclick={() => (viewMode = "timeline")}
             data-testid="traces-view-timeline"
+            role="radio"
+            aria-checked={viewMode === "timeline"}
           >
             Timeline
           </button>

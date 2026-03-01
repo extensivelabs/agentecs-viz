@@ -1,6 +1,11 @@
 <script lang="ts">
   import { world } from "./state/world.svelte";
-  import { filterSuggestions, type ClauseType, type QueryClause } from "./query";
+  import {
+    filterSuggestions,
+    getAvailableComponents,
+    type ClauseType,
+    type QueryClause,
+  } from "./query";
 
   let expanded = $state(false);
   let clauseType: ClauseType = $state("with");
@@ -14,9 +19,11 @@
     new Set(world.activeQuery?.clauses.map((c) => c.component) ?? []),
   );
 
+  const availableComponents = $derived(getAvailableComponents(world.entities));
+
   const suggestions = $derived(
     inputValue.length > 0
-      ? filterSuggestions(world.getAvailableComponents(), inputValue, usedComponents)
+      ? filterSuggestions(availableComponents, inputValue, usedComponents)
       : [],
   );
 

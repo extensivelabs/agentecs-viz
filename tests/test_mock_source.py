@@ -48,6 +48,14 @@ class TestMockWorldSource:
         finally:
             await source.disconnect()
 
+    async def test_get_snapshot_missing_historical_returns_current(self, source: MockWorldSource):
+        await source.connect()
+        try:
+            snapshot = await source.get_snapshot(99999)
+            assert snapshot.tick == source.get_current_tick()
+        finally:
+            await source.disconnect()
+
     async def test_pause_resume(self, source: MockWorldSource):
         await source.connect()
         try:
@@ -131,6 +139,71 @@ class TestMockWorldSource:
         source = MockWorldSource(entity_count=5)
         assert source.tick_range is None
 
+    async def test_spawned_entity_ids_are_monotonic(self, monkeypatch: pytest.MonkeyPatch):
+        source = MockWorldSource(entity_count=20, tick_interval=0.1, seed=123)
+        monkeypatch.setattr("agentecs_viz.sources.mock.ENTITY_SPAWN_PROBABILITY", 1.0)
+        monkeypatch.setattr("agentecs_viz.sources.mock.ENTITY_DESPAWN_PROBABILITY", 0.0)
+        monkeypatch.setattr("agentecs_viz.sources.mock.TASK_COMPLETION_PROBABILITY", 0.0)
+
+        await source.connect()
+        try:
+            await source.send_command("pause")
+            seen_ids = {entity.id for entity in source._entities}
+            for _ in range(5):
+                await source.send_command("step")
+                current_ids = {entity.id for entity in source._entities}
+                new_ids = current_ids - seen_ids
+                assert len(new_ids) == 1
+                new_id = next(iter(new_ids))
+                assert new_id == max(seen_ids) + 1
+                seen_ids = current_ids
+        finally:
+            await source.disconnect()
+
+    async def test_spawn_does_not_reuse_ids_after_highest_entity_removed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        source = MockWorldSource(entity_count=5, tick_interval=0.1, seed=123)
+        monkeypatch.setattr("agentecs_viz.sources.mock.ENTITY_SPAWN_PROBABILITY", 1.0)
+        monkeypatch.setattr("agentecs_viz.sources.mock.ENTITY_DESPAWN_PROBABILITY", 0.0)
+
+        await source.connect()
+        try:
+            removed = max(source._entities, key=lambda entity: entity.id)
+            source._entities = [entity for entity in source._entities if entity.id != removed.id]
+
+            await source.send_command("pause")
+            await source.send_command("step")
+
+            ids = {entity.id for entity in source._entities}
+            assert removed.id not in ids
+            assert source._next_entity_id - 1 in ids
+            assert source._next_entity_id - 1 > removed.id
+        finally:
+            await source.disconnect()
+
+    def test_unknown_component_data_returns_default_value(self):
+        source = MockWorldSource(entity_count=1, seed=123)
+        value = source._mock_component_data("UnknownComponent")
+        assert "value" in value
+        assert isinstance(value["value"], float)
+
+    def test_generate_deep_trace_returns_nested_spans(self):
+        source = MockWorldSource(entity_count=1, seed=123)
+        spans: list[SpanEventMessage] = []
+        start = 1000.0
+        end = source._generate_deep_trace(
+            spans=spans,
+            trace_id="trace",
+            parent_id="root",
+            entity_id=1,
+            cursor=start,
+        )
+
+        assert end > start
+        assert len(spans) >= 2
+        assert any(span.parent_span_id == "root" for span in spans)
+
     async def test_set_speed_rejects_bool(self, source: MockWorldSource):
         await source.connect()
         try:
@@ -165,14 +238,29 @@ class TestMockWorldSource:
         finally:
             await source.disconnect()
 
+    async def test_seeded_reconnect_recreates_same_initial_entities(self):
+        source = MockWorldSource(entity_count=5, seed=123)
+
+        await source.connect()
+        try:
+            first_entities = [entity.model_dump() for entity in source._entities]
+        finally:
+            await source.disconnect()
+
+        await source.connect()
+        try:
+            second_entities = [entity.model_dump() for entity in source._entities]
+            assert second_entities == first_entities
+        finally:
+            await source.disconnect()
+
     async def test_error_generation_over_ticks(
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):
         """Over many ticks, error events are generated deterministically."""
-        # Force random.random() to always return 0.0 so every tick produces an error
-        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             await source.send_command("pause")
             for _ in range(10):
                 await source.send_command("step")
@@ -187,10 +275,9 @@ class TestMockWorldSource:
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):
         """ErrorEventMessages appear in the event subscription stream."""
-        # Force errors on every tick so the assertion is deterministic
-        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             errors: list[ErrorEventMessage] = []
 
             async def collect_events():
@@ -208,9 +295,9 @@ class TestMockWorldSource:
 
     async def test_span_generation(self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch):
         """Over many ticks with forced span generation, spans are created."""
-        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             await source.send_command("pause")
             for _ in range(5):
                 await source.send_command("step")
@@ -225,9 +312,9 @@ class TestMockWorldSource:
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):
         """Generated spans have agentecs.tick and agentecs.entity_id attributes."""
-        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             await source.send_command("pause")
             await source.send_command("step")
 
@@ -244,9 +331,9 @@ class TestMockWorldSource:
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):
         """Generated spans form parent-child hierarchy with shared trace_id."""
-        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             await source.send_command("pause")
             await source.send_command("step")
 
@@ -269,9 +356,9 @@ class TestMockWorldSource:
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):
         """SpanEventMessages appear in the event subscription stream."""
-        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             spans: list[SpanEventMessage] = []
 
             async def collect_events():
@@ -290,9 +377,9 @@ class TestMockWorldSource:
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):
         """Each tick generates spans for multiple systems with distinct traces."""
-        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             await source.send_command("pause")
             await source.send_command("step")
 
@@ -318,9 +405,9 @@ class TestMockWorldSource:
         self, source: MockWorldSource, monkeypatch: pytest.MonkeyPatch
     ):
         """Systems within the same execution group have overlapping time ranges."""
-        monkeypatch.setattr("agentecs_viz.sources.mock.random.random", lambda: 0.0)
         await source.connect()
         try:
+            monkeypatch.setattr(source._rng, "random", lambda: 0.0)
             await source.send_command("pause")
             await source.send_command("step")
 

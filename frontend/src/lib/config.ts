@@ -7,6 +7,15 @@ export const RECONNECT_MAX_ATTEMPTS = 10;
 export const RECONNECT_BASE_DELAY_MS = 1000;
 export const RECONNECT_MAX_DELAY_MS = 30000;
 
+export type PlaybackMode = "live" | "paused" | "history" | "replay";
+
+export const PLAYBACK_MODE_TEXT_CLASS: Record<PlaybackMode, string> = {
+  live: "text-success",
+  paused: "text-warning",
+  history: "text-accent",
+  replay: "text-accent",
+};
+
 export interface ModelTokenPricing {
   inputPer1kUsd: number;
   outputPer1kUsd: number;

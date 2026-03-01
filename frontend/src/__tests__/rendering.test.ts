@@ -1,5 +1,41 @@
 import { describe, it, expect } from "vitest";
-import { clampTooltipPosition } from "../lib/rendering";
+import {
+  adaptiveMaxRadius,
+  clampTooltipPosition,
+  entityRadius,
+  layoutSpacing,
+} from "../lib/rendering";
+
+describe("adaptiveMaxRadius", () => {
+  it("returns max radius for small worlds", () => {
+    expect(adaptiveMaxRadius(10)).toBe(20);
+  });
+
+  it("shrinks radius as entity count increases", () => {
+    expect(adaptiveMaxRadius(100)).toBeLessThan(20);
+    expect(adaptiveMaxRadius(500)).toBeLessThanOrEqual(12);
+    expect(adaptiveMaxRadius(1000)).toBe(6);
+  });
+});
+
+describe("layoutSpacing", () => {
+  it("tracks adaptive radius", () => {
+    expect(layoutSpacing(10)).toBe(40);
+    expect(layoutSpacing(1000)).toBe(12);
+  });
+});
+
+describe("entityRadius", () => {
+  it("grows with component count up to cap", () => {
+    expect(entityRadius(0)).toBe(8);
+    expect(entityRadius(2)).toBe(12);
+    expect(entityRadius(20)).toBe(20);
+  });
+
+  it("respects minimum radius when maxRadius is small", () => {
+    expect(entityRadius(0, 1)).toBe(6);
+  });
+});
 
 describe("clampTooltipPosition", () => {
   it("keeps coordinates when already within bounds", () => {

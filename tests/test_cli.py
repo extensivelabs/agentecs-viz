@@ -1,6 +1,12 @@
+from __future__ import annotations
+
+from types import ModuleType
 from unittest.mock import patch
 
-from agentecs_viz.cli import create_parser, get_frontend_dir, main
+import pytest
+
+from agentecs_viz.cli import cmd_serve, create_parser, get_frontend_dir, load_world_source, main
+from agentecs_viz.sources.mock import MockWorldSource
 
 
 class TestCreateParser:
@@ -36,8 +42,6 @@ class TestCreateParser:
         assert args.command is None
 
     def test_version(self, capsys):
-        import pytest
-
         from agentecs_viz._version import __version__
 
         parser = create_parser()
@@ -48,17 +52,114 @@ class TestCreateParser:
 
 
 class TestGetFrontendDir:
+    def test_prefers_dev_dist_path(self):
+        with patch("agentecs_viz.cli.Path.exists", side_effect=[True]):
+            result = get_frontend_dir()
+
+        assert str(result).endswith("frontend/dist")
+
+    def test_falls_back_to_package_frontend_path(self):
+        with patch("agentecs_viz.cli.Path.exists", side_effect=[False, True]):
+            result = get_frontend_dir()
+
+        assert str(result).endswith("agentecs_viz/frontend")
+
     def test_not_found(self):
-        import pytest
+        with (
+            patch("agentecs_viz.cli.Path.exists", return_value=False),
+            pytest.raises(FileNotFoundError),
+        ):
+            get_frontend_dir()
 
-        with patch("agentecs_viz.cli.Path") as mock_path:
-            mock_inst = mock_path.return_value
-            dev = mock_inst.parent.parent.parent.__truediv__.return_value
-            dev.__truediv__.return_value.exists.return_value = False
-            mock_inst.parent.__truediv__.return_value.exists.return_value = False
 
-            with pytest.raises(FileNotFoundError):
-                get_frontend_dir()
+class TestLoadWorldSource:
+    def test_loads_from_get_world_source(self):
+        source = MockWorldSource(entity_count=1)
+        module = ModuleType("dummy_world_module")
+        module.get_world_source = lambda: source  # type: ignore[attr-defined]
+
+        with patch("agentecs_viz.cli.importlib.import_module", return_value=module):
+            loaded = load_world_source("dummy_world_module")
+
+        assert loaded is source
+
+    def test_loads_from_world_source_attribute(self):
+        source = MockWorldSource(entity_count=1)
+        module = ModuleType("dummy_world_module")
+        module.world_source = source  # type: ignore[attr-defined]
+
+        with patch("agentecs_viz.cli.importlib.import_module", return_value=module):
+            loaded = load_world_source("dummy_world_module")
+
+        assert loaded is source
+
+    def test_rejects_invalid_get_world_source_result(self):
+        module = ModuleType("dummy_world_module")
+        module.get_world_source = lambda: object()  # type: ignore[attr-defined]
+
+        with (
+            patch("agentecs_viz.cli.importlib.import_module", return_value=module),
+            pytest.raises(TypeError, match="expected WorldStateSource"),
+        ):
+            load_world_source("dummy_world_module")
+
+    def test_rejects_invalid_world_source_attribute(self):
+        module = ModuleType("dummy_world_module")
+        module.world_source = object()  # type: ignore[attr-defined]
+
+        with (
+            patch("agentecs_viz.cli.importlib.import_module", return_value=module),
+            pytest.raises(TypeError, match="expected WorldStateSource"),
+        ):
+            load_world_source("dummy_world_module")
+
+    def test_requires_provider_attribute(self):
+        module = ModuleType("dummy_world_module")
+
+        with (
+            patch("agentecs_viz.cli.importlib.import_module", return_value=module),
+            pytest.raises(AttributeError, match=r"must have 'get_world_source\(\)'"),
+        ):
+            load_world_source("dummy_world_module")
+
+    def test_import_error_wrapped(self):
+        with (
+            patch("agentecs_viz.cli.importlib.import_module", side_effect=ImportError("boom")),
+            pytest.raises(ImportError, match="Cannot import module"),
+        ):
+            load_world_source("bad.module")
+
+
+class TestCmdServe:
+    def test_cmd_serve_mock_no_frontend(self):
+        args = create_parser().parse_args(["serve", "--mock", "--no-frontend"])
+
+        with patch("uvicorn.run") as run:
+            result = cmd_serve(args)
+
+        assert result == 0
+        run.assert_called_once()
+
+    def test_cmd_serve_world_module(self):
+        args = create_parser().parse_args(["serve", "--world-module", "my.world", "--no-frontend"])
+        source = MockWorldSource(entity_count=1)
+
+        with (
+            patch("agentecs_viz.cli.load_world_source", return_value=source),
+            patch("uvicorn.run") as run,
+        ):
+            result = cmd_serve(args)
+
+        assert result == 0
+        run.assert_called_once()
+
+    def test_cmd_serve_world_module_type_error_returns_1(self):
+        args = create_parser().parse_args(["serve", "--world-module", "my.world", "--no-frontend"])
+
+        with patch("agentecs_viz.cli.load_world_source", side_effect=TypeError("bad source")):
+            result = cmd_serve(args)
+
+        assert result == 1
 
 
 class TestMain:
@@ -69,3 +170,8 @@ class TestMain:
     def test_serve_no_source_returns_1(self):
         result = main(["serve", "--no-frontend"])
         assert result == 1
+
+    def test_serve_mock_executes(self):
+        with patch("uvicorn.run"):
+            result = main(["serve", "--mock", "--no-frontend"])
+        assert result == 0

@@ -1,5 +1,3 @@
-// Data types (mirror snapshot.py)
-
 export interface ComponentSnapshot {
   type_name: string;
   type_short: string;
@@ -23,6 +21,7 @@ export interface WorldSnapshot {
 
 export interface ComponentDiff {
   component_type: string;
+  type_name: string;
   old_value: Record<string, unknown> | null;
   new_value: Record<string, unknown> | null;
 }
@@ -34,8 +33,6 @@ export interface TickDelta {
   destroyed: number[];
   modified: Record<number, ComponentDiff[]>;
 }
-
-// Server → Client messages (mirror protocol.py, discriminated by `type`)
 
 export interface SnapshotMessage {
   type: "snapshot";
@@ -104,8 +101,6 @@ export type ServerMessage =
   | TickUpdateMessage
   | MetadataMessage;
 
-// Client → Server commands (flat format, mirror protocol.py)
-
 export type ClientCommand =
   | { command: "subscribe" }
   | { command: "pause" }
@@ -113,8 +108,6 @@ export type ClientCommand =
   | { command: "step" }
   | { command: "seek"; tick: number }
   | { command: "set_speed"; ticks_per_second: number };
-
-// Config types (mirror config.py)
 
 export interface ArchetypeConfig {
   key: string;
@@ -144,28 +137,156 @@ export interface VisualizationConfig {
   entity_label_template?: string | null;
 }
 
-// Connection state
-
 export type ConnectionState =
   | "disconnected"
   | "connecting"
   | "connected"
   | "error";
 
-// Type guard
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
-const SERVER_MESSAGE_TYPES = new Set([
-  "snapshot",
-  "delta",
-  "error",
-  "error_event",
-  "span_event",
-  "tick_update",
-  "metadata",
-]);
+function isNumber(value: unknown): value is number {
+  return typeof value === "number";
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === "boolean";
+}
+
+function isTickRange(value: unknown): value is [number, number] {
+  return (
+    Array.isArray(value)
+    && value.length === 2
+    && isNumber(value[0])
+    && isNumber(value[1])
+  );
+}
+
+function isSpanStatus(value: unknown): value is SpanStatus {
+  return value === "ok" || value === "error" || value === "unset";
+}
+
+function isErrorSeverity(value: unknown): value is ErrorSeverity {
+  return value === "critical" || value === "warning" || value === "info";
+}
+
+function isComponentSnapshot(value: unknown): value is ComponentSnapshot {
+  return (
+    isRecord(value)
+    && isString(value.type_name)
+    && isString(value.type_short)
+    && isRecord(value.data)
+  );
+}
+
+function isEntitySnapshot(value: unknown): value is EntitySnapshot {
+  return (
+    isRecord(value)
+    && isNumber(value.id)
+    && Array.isArray(value.archetype)
+    && value.archetype.every(isString)
+    && Array.isArray(value.components)
+    && value.components.every(isComponentSnapshot)
+  );
+}
+
+function isWorldSnapshot(value: unknown): value is WorldSnapshot {
+  return (
+    isRecord(value)
+    && isNumber(value.tick)
+    && isNumber(value.timestamp)
+    && isNumber(value.entity_count)
+    && Array.isArray(value.entities)
+    && value.entities.every(isEntitySnapshot)
+    && Array.isArray(value.archetypes)
+    && value.archetypes.every(
+      (archetype): archetype is string[] => Array.isArray(archetype) && archetype.every(isString),
+    )
+    && isRecord(value.metadata)
+  );
+}
+
+function isComponentDiff(value: unknown): value is ComponentDiff {
+  return (
+    isRecord(value)
+    && isString(value.component_type)
+    && isString(value.type_name)
+    && (value.old_value === null || isRecord(value.old_value))
+    && (value.new_value === null || isRecord(value.new_value))
+  );
+}
+
+function isModifiedDiffMap(value: unknown): value is Record<number, ComponentDiff[]> {
+  if (!isRecord(value)) return false;
+  return Object.entries(value).every(
+    ([entityId, diffs]) => Number.isInteger(Number(entityId))
+      && Array.isArray(diffs)
+      && diffs.every(isComponentDiff),
+  );
+}
+
+function isTickDelta(value: unknown): value is TickDelta {
+  return (
+    isRecord(value)
+    && isNumber(value.tick)
+    && isNumber(value.timestamp)
+    && Array.isArray(value.spawned)
+    && value.spawned.every(isEntitySnapshot)
+    && Array.isArray(value.destroyed)
+    && value.destroyed.every(isNumber)
+    && isModifiedDiffMap(value.modified)
+  );
+}
 
 export function isServerMessage(data: unknown): data is ServerMessage {
-  if (typeof data !== "object" || data === null) return false;
-  const obj = data as Record<string, unknown>;
-  return typeof obj.type === "string" && SERVER_MESSAGE_TYPES.has(obj.type);
+  if (!isRecord(data) || !isString(data.type)) return false;
+
+  switch (data.type) {
+    case "snapshot":
+      return isNumber(data.tick) && isWorldSnapshot(data.snapshot);
+    case "delta":
+      return isNumber(data.tick) && isTickDelta(data.delta);
+    case "error":
+      return isNumber(data.tick) && isString(data.message);
+    case "error_event":
+      return (
+        isNumber(data.tick)
+        && isNumber(data.entity_id)
+        && isString(data.message)
+        && isErrorSeverity(data.severity)
+      );
+    case "span_event":
+      return (
+        isString(data.span_id)
+        && isString(data.trace_id)
+        && (data.parent_span_id === null || isString(data.parent_span_id))
+        && isString(data.name)
+        && isNumber(data.start_time)
+        && isNumber(data.end_time)
+        && isSpanStatus(data.status)
+        && isRecord(data.attributes)
+      );
+    case "tick_update":
+      return (
+        isNumber(data.tick)
+        && isNumber(data.entity_count)
+        && isBoolean(data.is_paused)
+      );
+    case "metadata":
+      return (
+        isNumber(data.tick)
+        && (data.config === null || isRecord(data.config))
+        && (data.tick_range === null || isTickRange(data.tick_range))
+        && isBoolean(data.supports_history)
+        && isBoolean(data.is_paused)
+      );
+    default:
+      return false;
+  }
 }
