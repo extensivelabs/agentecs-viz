@@ -17,6 +17,7 @@
     OVERVIEW_DOT_RADIUS,
     SELECTION_RING_COLOR,
     CHANGED_RING_COLOR,
+    LOOP_RING_COLOR,
     ERROR_RING_COLOR,
     MIN_HIT_RADIUS,
     entityRadius,
@@ -78,9 +79,11 @@
 
   let visualSelectedEntityId: number | null = null;
   let visualChangedEntityIds = new Set<number>();
+  let visualLoopEntityIds = new Set<number>();
   let visualErrorEntityIds = new Set<number>();
   let visualPastErrorEntityIds = new Set<number>();
   let visualChangedEntityIdsSource: Set<number> | null = null;
+  let visualLoopEntityIdsSource: Set<number> | null = null;
   let visualErrorEntityIdsSource: Set<number> | null = null;
   let visualPastErrorEntityIdsSource: Set<number> | null = null;
 
@@ -281,6 +284,7 @@
 
     entityVisualStates.delete(entityId);
     visualChangedEntityIds.delete(entityId);
+    visualLoopEntityIds.delete(entityId);
     visualErrorEntityIds.delete(entityId);
     visualPastErrorEntityIds.delete(entityId);
     filterMatches.delete(entityId);
@@ -322,26 +326,34 @@
   function drawEntityRings(entityId: number, state: EntityVisualState): void {
     const hasSelection = visualSelectedEntityId === entityId;
     const hasChanged = visualChangedEntityIds.has(entityId);
+    const hasLoop = visualLoopEntityIds.has(entityId);
     const hasError = visualErrorEntityIds.has(entityId);
     const hasPastError = visualPastErrorEntityIds.has(entityId);
 
+    let offset = 3;
+
     if (hasSelection) {
-      state.graphics.circle(0, 0, state.radius + 3).stroke({ color: SELECTION_RING_COLOR, width: 2 });
+      state.graphics.circle(0, 0, state.radius + offset).stroke({ color: SELECTION_RING_COLOR, width: 2 });
+      offset += 3;
     }
 
     if (hasChanged) {
-      state.graphics.circle(0, 0, state.radius + (hasSelection ? 6 : 3)).stroke({ color: CHANGED_RING_COLOR, width: 1.5 });
+      state.graphics.circle(0, 0, state.radius + offset).stroke({ color: CHANGED_RING_COLOR, width: 1.5 });
+      offset += 3;
+    }
+
+    if (hasLoop) {
+      state.graphics.circle(0, 0, state.radius + offset).stroke({ color: LOOP_RING_COLOR, width: 2 });
+      offset += 3;
     }
 
     if (hasError) {
-      const errorOffset = hasSelection && hasChanged ? 9 : hasSelection || hasChanged ? 6 : 3;
-      state.graphics.circle(0, 0, state.radius + errorOffset).stroke({ color: ERROR_RING_COLOR, width: 2 });
+      state.graphics.circle(0, 0, state.radius + offset).stroke({ color: ERROR_RING_COLOR, width: 2 });
       return;
     }
 
     if (hasPastError) {
-      const errorOffset = hasSelection && hasChanged ? 9 : hasSelection || hasChanged ? 6 : 3;
-      state.graphics.circle(0, 0, state.radius + errorOffset).stroke({ color: 0x666666, width: 1 });
+      state.graphics.circle(0, 0, state.radius + offset).stroke({ color: 0x666666, width: 1 });
     }
   }
 
@@ -671,9 +683,11 @@
 
       visualSelectedEntityId = null;
       visualChangedEntityIds = new Set<number>();
+      visualLoopEntityIds = new Set<number>();
       visualErrorEntityIds = new Set<number>();
       visualPastErrorEntityIds = new Set<number>();
       visualChangedEntityIdsSource = null;
+      visualLoopEntityIdsSource = null;
       visualErrorEntityIdsSource = null;
       visualPastErrorEntityIdsSource = null;
 
@@ -823,6 +837,7 @@
   $effect(() => {
     const selectedEntityId = world.selectedEntityId;
     const changedEntityIds = world.changedEntityIds;
+    const loopEntityIds = world.loopEntityIds;
     const errorEntityIds = world.errorEntityIds;
     const pastErrorEntityIds = world.pastErrorEntityIds;
 
@@ -840,6 +855,13 @@
       unionInto(affected, changedEntityIds);
       visualChangedEntityIds = new Set<number>(changedEntityIds);
       visualChangedEntityIdsSource = changedEntityIds;
+    }
+
+    if (loopEntityIds !== visualLoopEntityIdsSource) {
+      unionInto(affected, visualLoopEntityIds);
+      unionInto(affected, loopEntityIds);
+      visualLoopEntityIds = new Set<number>(loopEntityIds);
+      visualLoopEntityIdsSource = loopEntityIds;
     }
 
     if (errorEntityIds !== visualErrorEntityIdsSource) {

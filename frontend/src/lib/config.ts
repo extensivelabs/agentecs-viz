@@ -31,10 +31,19 @@ const rawCostBudgetThreshold = Number(
   import.meta.env.VITE_TOKEN_COST_BUDGET_USD ?? "1",
 );
 
+const rawLoopDetectionThreshold = Number(
+  import.meta.env.VITE_LOOP_DETECTION_THRESHOLD ?? "5",
+);
+
 export const TOKEN_COST_BUDGET_USD =
   Number.isFinite(rawCostBudgetThreshold) && rawCostBudgetThreshold > 0
     ? rawCostBudgetThreshold
     : 1;
+
+export const LOOP_DETECTION_THRESHOLD =
+  Number.isFinite(rawLoopDetectionThreshold) && rawLoopDetectionThreshold >= 1
+    ? Math.floor(rawLoopDetectionThreshold)
+    : 5;
 
 export const DEFAULT_COLOR_PALETTE: number[] = [
   0x8b5cf6, // purple

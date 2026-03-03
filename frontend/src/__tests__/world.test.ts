@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { LOOP_DETECTION_THRESHOLD } from "../lib/config";
 import * as diffModule from "../lib/diff";
 import { WorldState } from "../lib/state/world.svelte";
 import type {
@@ -408,6 +409,108 @@ describe("WorldState", () => {
       expect(state.changedEntityIds.has(1)).toBe(true);
       expect(state.changedEntityIds.has(2)).toBe(false);
       expect(state.newEntityIds.size).toBe(0);
+    });
+  });
+
+  describe("loop detection", () => {
+    beforeEach(() => {
+      state.connect("ws://test/ws");
+      MockWebSocket.instances[0].simulateOpen();
+    });
+
+    function sendSnapshot(tick: number, x: number): void {
+      MockWebSocket.instances[0].simulateMessage({
+        type: "snapshot",
+        tick,
+        snapshot: makeSnapshot({
+          tick,
+          entities: [
+            {
+              id: 1,
+              archetype: ["Agent", "Position"],
+              components: [
+                { type_name: "Agent", type_short: "Agent", data: { name: "a1" } },
+                { type_name: "Position", type_short: "Position", data: { x, y: 0 } },
+              ],
+            },
+            {
+              id: 2,
+              archetype: ["Task"],
+              components: [
+                { type_name: "Task", type_short: "Task", data: { status: "active" } },
+              ],
+            },
+          ],
+        }),
+      } satisfies SnapshotMessage);
+    }
+
+    it("flags entities that stop changing after prior activity", () => {
+      sendSnapshot(1, 0);
+      sendSnapshot(2, 1);
+
+      for (let i = 0; i < LOOP_DETECTION_THRESHOLD; i++) {
+        sendSnapshot(3 + i, 1);
+      }
+
+      expect(state.loopEntityIds.has(1)).toBe(true);
+      expect(state.loopEntityIds.has(2)).toBe(false);
+    });
+
+    it("clears loop state when entity starts changing again", () => {
+      sendSnapshot(1, 0);
+      sendSnapshot(2, 1);
+      for (let i = 0; i < LOOP_DETECTION_THRESHOLD; i++) {
+        sendSnapshot(3 + i, 1);
+      }
+
+      expect(state.loopEntityIds.has(1)).toBe(true);
+
+      sendSnapshot(3 + LOOP_DETECTION_THRESHOLD, 2);
+      expect(state.loopEntityIds.has(1)).toBe(false);
+    });
+
+    it("does not mark entities that never changed", () => {
+      sendSnapshot(1, 0);
+      for (let i = 0; i < LOOP_DETECTION_THRESHOLD + 2; i++) {
+        sendSnapshot(2 + i, 0);
+      }
+
+      expect(state.loopEntityIds.has(1)).toBe(false);
+      expect(state.loopEntityIds.has(2)).toBe(false);
+    });
+
+    it("exposes loop info for selected looping entity", () => {
+      sendSnapshot(1, 0);
+      sendSnapshot(2, 1);
+      for (let i = 0; i < LOOP_DETECTION_THRESHOLD; i++) {
+        sendSnapshot(3 + i, 1);
+      }
+
+      state.selectEntity(1);
+
+      expect(state.selectedEntityLoopInfo).not.toBeNull();
+      expect(state.selectedEntityLoopInfo?.cycleLength).toBe(1);
+      expect(state.selectedEntityLoopInfo?.frozenFields).toContain("Position.x");
+      expect(state.selectedEntityLoopInfo?.unchangedTicks).toBeGreaterThanOrEqual(
+        LOOP_DETECTION_THRESHOLD,
+      );
+    });
+
+    it("auto-pause sends pause command when a new loop is detected", async () => {
+      const ws = MockWebSocket.instances[0];
+      state.autoPauseOnLoop = true;
+
+      sendSnapshot(1, 0);
+      sendSnapshot(2, 1);
+      for (let i = 0; i < LOOP_DETECTION_THRESHOLD; i++) {
+        sendSnapshot(3 + i, 1);
+      }
+
+      await Promise.resolve();
+
+      const sent = ws.sentMessages.map((message) => JSON.parse(message));
+      expect(sent).toContainEqual({ command: "pause" });
     });
   });
 
