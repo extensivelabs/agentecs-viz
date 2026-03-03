@@ -57,6 +57,7 @@
   let diff = $derived(world.selectedEntityDiff);
   let pinnedDiff = $derived(world.selectedEntityPinnedDiff);
   let activeDiff = $derived(pinnedDiff ?? diff);
+  let loopInfo = $derived(world.selectedEntityLoopInfo);
   let previousTick = $derived(world.previousSnapshot?.tick ?? 0);
 
   function componentChanges(typeShort: string): ComponentChanges | undefined {
@@ -73,6 +74,12 @@
 
   function fieldCount(data: Record<string, unknown>): number {
     return Object.keys(data).length;
+  }
+
+  function formatFrozenFields(fields: string[]): string {
+    const preview = fields.slice(0, 5).join(", ");
+    if (fields.length <= 5) return preview;
+    return `${preview}, +${fields.length - 5} more`;
   }
 
   function close(): void {
@@ -140,6 +147,40 @@
               since tick {previousTick}
             {/if}
           </span>
+        </div>
+      {/if}
+
+      {#if loopInfo}
+        <div class="border-b border-bg-tertiary px-4 py-2" data-testid="loop-status">
+          <div class="mb-1 flex items-center gap-2 text-sm">
+            <span
+              class="rounded px-2 py-0.5 font-medium"
+              style="background-color: rgba(168, 85, 247, 0.2); color: #c084fc;"
+            >
+              Loop detected
+            </span>
+            <span class="text-text-muted">cycle length {loopInfo.cycleLength}</span>
+          </div>
+          <div class="text-sm text-text-muted">
+            unchanged for {loopInfo.unchangedTicks} {loopInfo.unchangedTicks === 1 ? "tick" : "ticks"}
+            since tick {loopInfo.unchangedSinceTick}
+          </div>
+          <div class="mt-1 text-sm text-text-muted">
+            {loopInfo.frozenFields.length} frozen {loopInfo.frozenFields.length === 1 ? "field" : "fields"}
+            {#if loopInfo.frozenFields.length > 0}
+              <span class="font-mono text-text-secondary">: {formatFrozenFields(loopInfo.frozenFields)}</span>
+            {/if}
+          </div>
+          <label class="mt-1 flex items-center gap-1.5 text-sm text-text-muted">
+            <input
+              type="checkbox"
+              class="accent-purple-400"
+              checked={world.autoPauseOnLoop}
+              onchange={() => world.toggleAutoPauseOnLoop()}
+              data-testid="auto-pause-loop-toggle"
+            />
+            Auto-pause on loop
+          </label>
         </div>
       {/if}
 

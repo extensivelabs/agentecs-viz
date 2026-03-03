@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, fireEvent } from "@testing-library/svelte";
 import InspectorPanel from "../lib/InspectorPanel.svelte";
+import { LOOP_DETECTION_THRESHOLD } from "../lib/config";
 import { world } from "../lib/state/world.svelte";
 import type { WorldSnapshot, VisualizationConfig, MetadataMessage, SnapshotMessage } from "../lib/types";
 import { MockWebSocket, makeEntity, makeSnapshot, makeConfig, makeSpanEvent, setWorldState } from "./helpers";
@@ -345,6 +346,55 @@ describe("InspectorPanel", () => {
       const pinBtn = container.querySelector("[data-testid='pin-state-btn']");
       expect(pinBtn).toBeTruthy();
       expect(pinBtn!.textContent).toContain("Pin current state");
+    });
+
+    it("shows loop section and allows toggling auto-pause", async () => {
+      const sendSnapshot = (tick: number, x: number) => {
+        MockWebSocket.instances[0].simulateMessage({
+          type: "snapshot",
+          tick,
+          snapshot: makeSnapshot({
+            tick,
+            entities: [
+              {
+                id: 1,
+                archetype: ["Agent", "Position"],
+                components: [
+                  { type_name: "Agent", type_short: "Agent", data: { name: "a1" } },
+                  { type_name: "Position", type_short: "Position", data: { x, y: 0 } },
+                ],
+              },
+              {
+                id: 2,
+                archetype: ["Task"],
+                components: [
+                  { type_name: "Task", type_short: "Task", data: { status: "active" } },
+                ],
+              },
+            ],
+          }),
+        } satisfies SnapshotMessage);
+      };
+
+      sendSnapshot(1, 0);
+      sendSnapshot(2, 1);
+      for (let i = 0; i < LOOP_DETECTION_THRESHOLD; i++) {
+        sendSnapshot(3 + i, 1);
+      }
+
+      world.selectEntity(1);
+
+      const { container } = render(InspectorPanel);
+      const loopSection = container.querySelector("[data-testid='loop-status']");
+      expect(loopSection).toBeTruthy();
+      expect(loopSection!.textContent).toContain("Loop detected");
+      expect(loopSection!.textContent).toContain("cycle length 1");
+
+      expect(world.autoPauseOnLoop).toBe(false);
+      const toggle = container.querySelector("[data-testid='auto-pause-loop-toggle']");
+      expect(toggle).toBeTruthy();
+      await fireEvent.click(toggle!);
+      expect(world.autoPauseOnLoop).toBe(true);
     });
   });
 });

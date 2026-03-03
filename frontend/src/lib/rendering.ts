@@ -25,6 +25,7 @@ export const LABEL_ZOOM_THRESHOLD = 1.5;
 export const SELECTION_RING_COLOR = 0xffffff;
 export const ERROR_RING_COLOR = 0xf87171;
 export const CHANGED_RING_COLOR = 0xfbbf24;
+export const LOOP_RING_COLOR = 0xa855f7;
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * Math.max(0, Math.min(1, t));

@@ -1,4 +1,5 @@
 import {
+  LOOP_DETECTION_THRESHOLD,
   TOKEN_COST_BUDGET_USD,
   WS_URL,
   type PlaybackMode,
@@ -58,6 +59,8 @@ export class WorldState {
 
   newEntityIds: Set<number> = $state(new Set());
   changedEntityIds: Set<number> = $state(new Set());
+  loopEntityIds: Set<number> = $state(new Set());
+  autoPauseOnLoop: boolean = $state(false);
 
   errors: ErrorEventMessage[] = $state.raw([]);
   errorPanelOpen: boolean = $state(false);
@@ -74,6 +77,8 @@ export class WorldState {
 
   private client: WebSocketClient | null = null;
   private entityHashes = new Map<number, string>();
+  private unchangedTickCounts = new Map<number, number>();
+  private everChangedEntityIds = new Set<number>();
   private replayTimer: ReturnType<typeof setInterval> | null = null;
   private currentSpeed: number = 1;
   private spanUsageCacheSpans: SpanEventMessage[] = [];
@@ -238,6 +243,32 @@ export class WorldState {
       ? this.entityDiffs.get(this.selectedEntityId) ?? null
       : null,
   );
+
+  selectedEntityLoopInfo: {
+    cycleLength: number;
+    unchangedTicks: number;
+    unchangedSinceTick: number;
+    frozenFields: string[];
+  } | null = $derived.by(() => {
+    if (this.selectedEntityId === null || !this.loopEntityIds.has(this.selectedEntityId)) {
+      return null;
+    }
+
+    const entity = this.selectedEntity;
+    if (!entity) return null;
+
+    const unchangedTicks = this.unchangedTickCounts.get(entity.id) ?? 0;
+    const frozenFields = entity.components.flatMap((component) =>
+      Object.keys(component.data).map((fieldName) => `${component.type_short}.${fieldName}`),
+    );
+
+    return {
+      cycleLength: 1,
+      unchangedTicks,
+      unchangedSinceTick: Math.max(0, this.tick - unchangedTicks),
+      frozenFields,
+    };
+  });
 
   entityDiffCounts: Map<number, number> = $derived.by(() => {
     const counts = new Map<number, number>();
@@ -436,8 +467,11 @@ export class WorldState {
     this.isPaused = false;
     this.lastError = null;
     this.entityHashes.clear();
+    this.unchangedTickCounts.clear();
+    this.everChangedEntityIds.clear();
     this.newEntityIds = new Set();
     this.changedEntityIds = new Set();
+    this.loopEntityIds = new Set();
     this.selectedEntityId = null;
     this.errors = [];
     this.errorPanelOpen = false;
@@ -539,6 +573,10 @@ export class WorldState {
   jumpToError(error: ErrorEventMessage): void {
     this.seek(error.tick);
     this.selectEntity(error.entity_id);
+  }
+
+  toggleAutoPauseOnLoop(): void {
+    this.autoPauseOnLoop = !this.autoPauseOnLoop;
   }
 
   pinCurrentState(): void {
@@ -804,9 +842,15 @@ export class WorldState {
 
   private updateEntityTracking(newSnapshot: WorldSnapshot): void {
     const prevHashes = this.entityHashes;
+    const prevLoopIds = this.loopEntityIds;
+    const prevUnchangedTickCounts = this.unchangedTickCounts;
+    const prevEverChangedEntityIds = this.everChangedEntityIds;
     const newHashes = new Map<number, string>();
     const newIds = new Set<number>();
     const changedIds = new Set<number>();
+    const nextUnchangedTickCounts = new Map<number, number>();
+    const nextLoopIds = new Set<number>();
+    const nextEverChangedEntityIds = new Set<number>();
 
     for (const entity of newSnapshot.entities) {
       const hash = entityHash(entity);
@@ -818,11 +862,50 @@ export class WorldState {
       } else if (prevHash !== hash) {
         changedIds.add(entity.id);
       }
+
+      const wasEverChanged = prevEverChangedEntityIds.has(entity.id);
+
+      if (changedIds.has(entity.id)) {
+        nextUnchangedTickCounts.set(entity.id, 0);
+        nextEverChangedEntityIds.add(entity.id);
+        continue;
+      }
+
+      if (newIds.has(entity.id)) {
+        continue;
+      }
+
+      const unchangedTicks = (prevUnchangedTickCounts.get(entity.id) ?? 0) + 1;
+      nextUnchangedTickCounts.set(entity.id, unchangedTicks);
+
+      if (wasEverChanged) {
+        nextEverChangedEntityIds.add(entity.id);
+        if (unchangedTicks >= LOOP_DETECTION_THRESHOLD) {
+          nextLoopIds.add(entity.id);
+        }
+      }
+    }
+
+    let shouldAutoPause = false;
+    if (this.autoPauseOnLoop && nextLoopIds.size > 0) {
+      for (const id of nextLoopIds) {
+        if (!prevLoopIds.has(id)) {
+          shouldAutoPause = true;
+          break;
+        }
+      }
     }
 
     this.entityHashes = newHashes;
+    this.unchangedTickCounts = nextUnchangedTickCounts;
+    this.everChangedEntityIds = nextEverChangedEntityIds;
     this.newEntityIds = newIds;
     this.changedEntityIds = changedIds;
+    this.loopEntityIds = nextLoopIds;
+
+    if (shouldAutoPause && !this.isPaused) {
+      queueMicrotask(() => this.pause());
+    }
   }
 
   private getSpanUsageAtTick(tick: number): AggregatedSpanUsage {

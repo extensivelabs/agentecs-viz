@@ -182,6 +182,46 @@ class TestMockWorldSource:
         finally:
             await source.disconnect()
 
+    async def test_loop_candidates_freeze_after_initial_change(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        source = MockWorldSource(entity_count=20, tick_interval=0.1, seed=123)
+        monkeypatch.setattr("agentecs_viz.sources.mock.LOOP_CANDIDATE_PROBABILITY", 1.0)
+        monkeypatch.setattr("agentecs_viz.sources.mock.LOOP_FREEZE_MIN_TICKS", 1)
+        monkeypatch.setattr("agentecs_viz.sources.mock.LOOP_FREEZE_MAX_TICKS", 1)
+        monkeypatch.setattr("agentecs_viz.sources.mock.ENTITY_SPAWN_PROBABILITY", 0.0)
+        monkeypatch.setattr("agentecs_viz.sources.mock.ENTITY_DESPAWN_PROBABILITY", 0.0)
+        monkeypatch.setattr("agentecs_viz.sources.mock.TASK_COMPLETION_PROBABILITY", 0.0)
+
+        await source.connect()
+        try:
+            await source.send_command("pause")
+            loop_candidates = list(source._entity_freeze_tick)
+            assert len(loop_candidates) > 0
+
+            def component_data_by_id(snapshot):
+                return {
+                    entity.id: {
+                        component.type_short: dict(component.data)
+                        for component in entity.components
+                    }
+                    for entity in snapshot.entities
+                }
+
+            initial_data = component_data_by_id(await source.get_snapshot())
+            await source.send_command("step")
+            first_data = component_data_by_id(await source.get_snapshot())
+            await source.send_command("step")
+            second_data = component_data_by_id(await source.get_snapshot())
+
+            assert any(
+                initial_data[entity_id] != first_data[entity_id]
+                and first_data[entity_id] == second_data[entity_id]
+                for entity_id in loop_candidates
+            )
+        finally:
+            await source.disconnect()
+
     def test_unknown_component_data_returns_default_value(self):
         source = MockWorldSource(entity_count=1, seed=123)
         value = source._mock_component_data("UnknownComponent")

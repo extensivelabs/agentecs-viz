@@ -25,6 +25,9 @@ ENTITY_DESPAWN_PROBABILITY = 0.02
 MAX_ENTITY_MULTIPLIER = 1.5
 MIN_ENTITY_COUNT = 10
 ERROR_PROBABILITY = 0.10
+LOOP_CANDIDATE_PROBABILITY = 0.20
+LOOP_FREEZE_MIN_TICKS = 5
+LOOP_FREEZE_MAX_TICKS = 15
 SYSTEM_NAMES = [
     "MovementSystem",
     "TaskScheduler",
@@ -190,6 +193,7 @@ class MockWorldSource(TickLoopSource):
         self._tick = 0
         self._next_entity_id = 0
         self._entities: list[EntitySnapshot] = []
+        self._entity_freeze_tick: dict[int, int] = {}
         self._history = InMemoryHistoryStore(
             max_ticks=max_history_ticks,
             checkpoint_interval=100,
@@ -214,6 +218,9 @@ class MockWorldSource(TickLoopSource):
         self._rng = random.Random(self._seed)
         self._history.clear()
         self._entities = self._generate_entities()
+        self._entity_freeze_tick = {}
+        for entity in self._entities:
+            self._maybe_schedule_entity_freeze(entity)
         snapshot = self._build_snapshot()
         self._history.record_tick(snapshot)
 
@@ -282,6 +289,16 @@ class MockWorldSource(TickLoopSource):
             entities.append(EntitySnapshot(id=self._next_entity_id, components=components))
             self._next_entity_id += 1
         return entities
+
+    def _maybe_schedule_entity_freeze(self, entity: EntitySnapshot) -> None:
+        type_names = {component.type_short for component in entity.components}
+        if "Position" not in type_names or "Velocity" not in type_names:
+            return
+        if self._rng.random() >= LOOP_CANDIDATE_PROBABILITY:
+            return
+
+        freeze_delay = self._rng.randint(LOOP_FREEZE_MIN_TICKS, LOOP_FREEZE_MAX_TICKS)
+        self._entity_freeze_tick[entity.id] = self._tick + freeze_delay
 
     def _generate_component(self, type_name: str) -> ComponentSnapshot:
         return ComponentSnapshot(
@@ -534,10 +551,15 @@ class MockWorldSource(TickLoopSource):
     def _update_entities(self) -> None:
         for entity in self._entities:
             comp_by_type = {c.type_short: c for c in entity.components}
+            vel = comp_by_type.get("Velocity")
+
+            freeze_tick = self._entity_freeze_tick.get(entity.id)
+            if freeze_tick is not None and self._tick >= freeze_tick and vel:
+                vel.data["dx"] = 0.0
+                vel.data["dy"] = 0.0
 
             if "Position" in comp_by_type:
                 pos = comp_by_type["Position"]
-                vel = comp_by_type.get("Velocity")
                 if vel:
                     pos.data["x"] += vel.data.get("dx", 0)
                     pos.data["y"] += vel.data.get("dy", 0)
@@ -563,9 +585,11 @@ class MockWorldSource(TickLoopSource):
                     components=[self._generate_component(ct) for ct in archetype_template],
                 )
             )
+            self._maybe_schedule_entity_freeze(self._entities[-1])
 
         if (
             self._rng.random() < ENTITY_DESPAWN_PROBABILITY
             and len(self._entities) > MIN_ENTITY_COUNT
         ):
-            self._entities.pop(self._rng.randrange(len(self._entities)))
+            removed_entity = self._entities.pop(self._rng.randrange(len(self._entities)))
+            self._entity_freeze_tick.pop(removed_entity.id, None)
