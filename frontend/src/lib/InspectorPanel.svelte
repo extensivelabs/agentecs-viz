@@ -9,6 +9,7 @@
     severityClasses,
   } from "./utils";
   import { resolveArchetypeColorCSS } from "./colors";
+  import DistributionPanel from "./DistributionPanel.svelte";
   import JsonTree from "./JsonTree.svelte";
   import type { ComponentChanges } from "./diff";
 
@@ -273,8 +274,6 @@
       </div>
     </div>
   {:else}
-    <div class="flex flex-1 items-center justify-center text-sm text-text-muted" data-testid="inspector-empty">
-      Select an entity to inspect
-    </div>
+    <DistributionPanel />
   {/if}
 </aside>

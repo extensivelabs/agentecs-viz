@@ -1,10 +1,14 @@
 import type { EntitySnapshot } from "./types";
 
-export type ClauseType = "with" | "without";
+export type ClauseType = "with" | "without" | "value_eq" | "value_range";
 
 export interface QueryClause {
   type: ClauseType;
   component: string;
+  field?: string;
+  value?: string;
+  min?: number;
+  max?: number;
 }
 
 export interface QueryDef {
@@ -20,9 +24,41 @@ export function matchesQuery(
 
   for (const clause of query.clauses) {
     const has = entity.archetype.includes(clause.component);
-    if (clause.type === "with" && !has) return false;
-    if (clause.type === "without" && has) return false;
+
+    if (clause.type === "with") {
+      if (!has) return false;
+      continue;
+    }
+
+    if (clause.type === "without") {
+      if (has) return false;
+      continue;
+    }
+
+    const component = entity.components.find(
+      (candidate) => candidate.type_short === clause.component,
+    );
+
+    if (clause.type === "value_eq") {
+      if (!component || clause.field === undefined || clause.value === undefined) {
+        return false;
+      }
+
+      const value = component.data[clause.field];
+      if (value === undefined || value === null) return false;
+      if (String(value) !== clause.value) return false;
+      continue;
+    }
+
+    if (!component || clause.field === undefined) return false;
+    const value = component.data[clause.field];
+    if (typeof value !== "number") return false;
+
+    const min = clause.min ?? -Infinity;
+    const max = clause.max ?? Infinity;
+    if (value < min || value >= max) return false;
   }
+
   return true;
 }
 

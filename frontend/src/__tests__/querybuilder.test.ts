@@ -58,6 +58,34 @@ describe("QueryBuilder", () => {
     expect(chips[1].textContent).toContain("Task");
   });
 
+  it("renders chips for value clauses", () => {
+    world.setQuery({
+      name: "",
+      clauses: [
+        {
+          type: "value_eq",
+          component: "Agent",
+          field: "state",
+          value: "idle",
+        },
+        {
+          type: "value_range",
+          component: "Position",
+          field: "x",
+          min: 0,
+          max: 10,
+        },
+      ],
+    });
+
+    render(QueryBuilder);
+
+    const chips = screen.getAllByTestId("clause-chip");
+    expect(chips).toHaveLength(2);
+    expect(chips[0].textContent).toContain("Agent.state = idle");
+    expect(chips[1].textContent).toContain("Position.x in [0, 10)");
+  });
+
   it("clear button removes active query", async () => {
     world.setQuery({ name: "", clauses: [{ type: "with", component: "Agent" }] });
     render(QueryBuilder);
