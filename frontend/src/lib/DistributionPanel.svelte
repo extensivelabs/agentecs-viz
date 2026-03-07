@@ -247,6 +247,14 @@
     event.preventDefault();
     onRowClick(row);
   }
+
+  function rowAriaLabel(row: ChartRow): string {
+    if (row.kind === "categorical") {
+      return `Filter by ${row.bin.value}`;
+    }
+
+    return `Filter by ${row.bin.label}`;
+  }
 </script>
 
 <div class="flex h-full flex-1 flex-col p-3">
@@ -363,7 +371,7 @@
               data-testid="distribution-bar"
               tabindex="0"
               role="button"
-              aria-label={`Filter by ${row.label}`}
+              aria-label={rowAriaLabel(row)}
               onclick={() => onRowClick(row)}
               onkeydown={(event) => onRowKeydown(event, row)}
             />

@@ -1,3 +1,4 @@
+import { serializeFilterValue } from "./filter-value";
 import type { EntitySnapshot } from "./types";
 
 export type ClauseType = "with" | "without" | "value_eq" | "value_range";
@@ -46,8 +47,9 @@ export function matchesQuery(
       }
 
       const value = component.data[clause.field];
-      if (value === undefined || value === null) return false;
-      if (String(value) !== clause.value) return false;
+      const serializedValue = serializeFilterValue(value);
+      if (serializedValue === null) return false;
+      if (serializedValue !== clause.value) return false;
       continue;
     }
 

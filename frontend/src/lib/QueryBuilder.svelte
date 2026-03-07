@@ -19,9 +19,7 @@
     new Set(
       (world.activeQuery?.clauses ?? [])
         .filter(
-          (clause) =>
-            (clause.type === "with" || clause.type === "without")
-            && clause.type === clauseType,
+          (clause) => clause.type === "with" || clause.type === "without",
         )
         .map((clause) => clause.component),
     ),
@@ -41,7 +39,6 @@
       existing.some(
         (c) =>
           (c.type === "with" || c.type === "without")
-          && c.type === clauseType
           && c.component === component,
       )
     ) {

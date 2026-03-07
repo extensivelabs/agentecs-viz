@@ -1,3 +1,4 @@
+import { serializeFilterValue } from "./filter-value";
 import type { EntitySnapshot } from "./types";
 
 export type FieldType = "numeric" | "categorical";
@@ -121,7 +122,9 @@ function asCategoricalDistribution(
   const binsByValue = new Map<string, CategoricalBin>();
 
   for (const entry of values) {
-    const key = String(entry.value);
+    const key = serializeFilterValue(entry.value);
+    if (key === null) continue;
+
     const existing = binsByValue.get(key);
     if (existing) {
       existing.count += 1;

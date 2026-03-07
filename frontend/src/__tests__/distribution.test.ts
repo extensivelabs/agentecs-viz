@@ -133,4 +133,19 @@ describe("computeDistribution", () => {
       { value: "many", count: 1, entityIds: [2] },
     ]);
   });
+
+  it("uses stable serialization for object categorical values", () => {
+    const entities = [
+      makeEntity(1, [{ type_short: "Stats", data: { value: { b: 2, a: 1 } } }]),
+      makeEntity(2, [{ type_short: "Stats", data: { value: { a: 1, b: 2 } } }]),
+      makeEntity(3, [{ type_short: "Stats", data: { value: { a: 3 } } }]),
+    ];
+
+    const distribution = computeDistribution(entities, "Stats", "value");
+    expect(distribution.type).toBe("categorical");
+    expect(distribution.bins).toEqual([
+      { value: '{"a":1,"b":2}', count: 2, entityIds: [1, 2] },
+      { value: '{"a":3}', count: 1, entityIds: [3] },
+    ]);
+  });
 });

@@ -7,6 +7,7 @@ import {
   matchingEntityIds,
   type QueryDef,
 } from "../lib/query";
+import { serializeFilterValue } from "../lib/filter-value";
 import { makeEntity } from "./helpers";
 
 const agentPos = makeEntity(1, ["Agent", "Position"]);
@@ -32,6 +33,12 @@ const entityWithoutAgent = makeEntity(14, [{ type_short: "Task", data: { status:
 const entityWithNaN = makeEntity(15, [
   { type_short: "Agent", data: { state: "unknown", score: Number.NaN } },
 ]);
+const entityWithObjectValue = makeEntity(16, [
+  { type_short: "Agent", data: { meta: { b: 2, a: 1 } } },
+]);
+const entityWithEquivalentObjectValue = makeEntity(17, [
+  { type_short: "Agent", data: { meta: { a: 1, b: 2 } } },
+]);
 
 const entitiesWithValues = [
   entityWithValues,
@@ -40,6 +47,8 @@ const entitiesWithValues = [
   entityWithNonNumeric,
   entityWithoutAgent,
   entityWithNaN,
+  entityWithObjectValue,
+  entityWithEquivalentObjectValue,
 ];
 
 describe("matchesQuery", () => {
@@ -165,6 +174,23 @@ describe("matchesQuery", () => {
     expect(matchesQuery(entityWithValues, q)).toBe(false);
     expect(matchesQuery(entityWithOtherValue, q)).toBe(true);
     expect(matchesQuery(entityWithoutAgent, q)).toBe(false);
+  });
+
+  it("value_eq uses stable serialization for object values", () => {
+    const q: QueryDef = {
+      name: "",
+      clauses: [
+        {
+          type: "value_eq",
+          component: "Agent",
+          field: "meta",
+          value: serializeFilterValue({ a: 1, b: 2 }) ?? "",
+        },
+      ],
+    };
+
+    expect(matchesQuery(entityWithObjectValue, q)).toBe(true);
+    expect(matchesQuery(entityWithEquivalentObjectValue, q)).toBe(true);
   });
 });
 

@@ -138,4 +138,21 @@ describe("QueryBuilder", () => {
       expect(screen.getByText("Velocity")).toBeTruthy();
     });
   });
+
+  it("does not suggest a component already used by the opposite clause type", async () => {
+    world.setQuery({
+      name: "",
+      clauses: [{ type: "with", component: "Agent" }],
+    });
+
+    render(QueryBuilder);
+    await fireEvent.click(screen.getByTestId("query-toggle"));
+    await fireEvent.click(screen.getByTestId("clause-type-without"));
+
+    const input = screen.getByTestId("component-input") as HTMLInputElement;
+    await fireEvent.focus(input);
+    await fireEvent.input(input, { target: { value: "Ag" } });
+
+    expect(screen.queryByText("Agent")).toBeNull();
+  });
 });
