@@ -73,8 +73,8 @@ describe("computeDistribution", () => {
     expect(distribution.totalWithComponent).toBe(4);
     expect(distribution.missingCount).toBe(1);
     expect(distribution.bins).toEqual([
-      { value: "idle", count: 2, entityIds: [1, 3] },
-      { value: "working", count: 1, entityIds: [2] },
+      { value: "idle", count: 2 },
+      { value: "working", count: 1 },
     ]);
   });
 
@@ -98,9 +98,7 @@ describe("computeDistribution", () => {
     expect(distribution.missingCount).toBe(1);
     expect(distribution.bins).toHaveLength(2);
     expect(distribution.bins[0].count).toBe(1);
-    expect(distribution.bins[0].entityIds).toEqual([1]);
     expect(distribution.bins[1].count).toBe(2);
-    expect(distribution.bins[1].entityIds).toEqual([2, 3]);
   });
 
   it("returns a single bin when all numeric values are identical", () => {
@@ -129,8 +127,8 @@ describe("computeDistribution", () => {
     const distribution = computeDistribution(entities, "Stats", "value");
     expect(distribution.type).toBe("categorical");
     expect(distribution.bins).toEqual([
-      { value: "1", count: 1, entityIds: [1] },
-      { value: "many", count: 1, entityIds: [2] },
+      { value: "1", count: 1 },
+      { value: "many", count: 1 },
     ]);
   });
 
@@ -144,8 +142,21 @@ describe("computeDistribution", () => {
     const distribution = computeDistribution(entities, "Stats", "value");
     expect(distribution.type).toBe("categorical");
     expect(distribution.bins).toEqual([
-      { value: '{"a":1,"b":2}', count: 2, entityIds: [1, 2] },
-      { value: '{"a":3}', count: 1, entityIds: [3] },
+      { value: '{"a":1,"b":2}', count: 2 },
+      { value: '{"a":3}', count: 1 },
     ]);
+  });
+
+  it("counts non-serializable values as missing", () => {
+    const entities = [
+      makeEntity(1, [{ type_short: "Stats", data: { value: Number.NaN } }]),
+      makeEntity(2, [{ type_short: "Stats", data: { value: Infinity } }]),
+      makeEntity(3, [{ type_short: "Stats", data: { value: "ok" } }]),
+    ];
+
+    const distribution = computeDistribution(entities, "Stats", "value");
+    expect(distribution.totalWithComponent).toBe(3);
+    expect(distribution.missingCount).toBe(2);
+    expect(distribution.bins).toEqual([{ value: "ok", count: 1 }]);
   });
 });

@@ -6,14 +6,12 @@ export type FieldType = "numeric" | "categorical";
 export interface CategoricalBin {
   value: string;
   count: number;
-  entityIds: number[];
 }
 
 export interface NumericBin {
   min: number;
   max: number;
   count: number;
-  entityIds: number[];
   label: string;
 }
 
@@ -40,7 +38,6 @@ export interface NumericDistribution {
 export type Distribution = CategoricalDistribution | NumericDistribution;
 
 type SampledFieldValue = {
-  entityId: number;
   value: unknown;
 };
 
@@ -80,7 +77,12 @@ function collectComponentFieldValues(
       continue;
     }
 
-    values.push({ entityId: entity.id, value });
+    if (serializeFilterValue(value) === null) {
+      missingCount += 1;
+      continue;
+    }
+
+    values.push({ value });
   }
 
   return { totalWithComponent, missingCount, values };
@@ -128,14 +130,12 @@ function asCategoricalDistribution(
     const existing = binsByValue.get(key);
     if (existing) {
       existing.count += 1;
-      existing.entityIds.push(entry.entityId);
       continue;
     }
 
     binsByValue.set(key, {
       value: key,
       count: 1,
-      entityIds: [entry.entityId],
     });
   }
 
@@ -162,7 +162,7 @@ function asNumericDistribution(
   missingCount: number,
   bucketCount: number,
 ): NumericDistribution {
-  const numericValues = values as Array<{ entityId: number; value: number }>;
+  const numericValues = values as Array<{ value: number }>;
   let min = Infinity;
   let max = -Infinity;
 
@@ -185,7 +185,6 @@ function asNumericDistribution(
           min,
           max,
           count: numericValues.length,
-          entityIds: numericValues.map((entry) => entry.entityId),
           label: formatNumber(min),
         },
       ],
@@ -209,7 +208,6 @@ function asNumericDistribution(
       min: bucketMin,
       max: bucketMax,
       count: 0,
-      entityIds: [],
       label: formatRangeLabel(bucketMin, bucketMax),
     };
   });
@@ -222,7 +220,6 @@ function asNumericDistribution(
     );
 
     bins[bucketIndex].count += 1;
-    bins[bucketIndex].entityIds.push(entry.entityId);
   }
 
   return {
