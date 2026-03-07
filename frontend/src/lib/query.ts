@@ -9,6 +9,7 @@ export interface QueryClause {
   value?: string;
   min?: number;
   max?: number;
+  inclusiveMax?: boolean;
 }
 
 export interface QueryDef {
@@ -52,11 +53,12 @@ export function matchesQuery(
 
     if (!component || clause.field === undefined) return false;
     const value = component.data[clause.field];
-    if (typeof value !== "number") return false;
+    if (typeof value !== "number" || !Number.isFinite(value)) return false;
 
     const min = clause.min ?? -Infinity;
     const max = clause.max ?? Infinity;
-    if (value < min || value >= max) return false;
+    const isBelowMax = clause.inclusiveMax ? value <= max : value < max;
+    if (value < min || !isBelowMax) return false;
   }
 
   return true;

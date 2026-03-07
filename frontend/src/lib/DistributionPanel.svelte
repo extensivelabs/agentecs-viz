@@ -148,7 +148,11 @@
     }
 
     if (left.type === "value_range" && right.type === "value_range") {
-      return left.min === right.min && left.max === right.max;
+      return (
+        left.min === right.min
+        && left.max === right.max
+        && left.inclusiveMax === right.inclusiveMax
+      );
     }
 
     return false;
@@ -178,8 +182,11 @@
     }
 
     if (activeValueClause.type !== "value_range") return false;
-    const rowMax = row.isLast ? Infinity : row.bin.max;
-    return activeValueClause.min === row.bin.min && activeValueClause.max === rowMax;
+    return (
+      activeValueClause.min === row.bin.min
+      && activeValueClause.max === row.bin.max
+      && Boolean(activeValueClause.inclusiveMax) === row.isLast
+    );
   }
 
   function applyValueClause(nextClause: QueryClause): void {
@@ -230,7 +237,8 @@
       component: selectedComponent,
       field: selectedField,
       min: row.bin.min,
-      max: row.isLast ? Infinity : row.bin.max,
+      max: row.bin.max,
+      inclusiveMax: row.isLast,
     });
   }
 
@@ -310,9 +318,10 @@
           width={SVG_WIDTH}
           height={svgHeight}
           viewBox={`0 0 ${SVG_WIDTH} ${svgHeight}`}
-          role="img"
-          aria-label="Component value distribution"
+          role="group"
+          aria-labelledby="distribution-chart-title"
         >
+          <title id="distribution-chart-title">Component value distribution</title>
           {#each chartRows as row, index (row.key)}
             <text
               x={LABEL_X}

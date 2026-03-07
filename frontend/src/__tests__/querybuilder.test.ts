@@ -75,15 +75,24 @@ describe("QueryBuilder", () => {
           min: 0,
           max: 10,
         },
+        {
+          type: "value_range",
+          component: "Position",
+          field: "y",
+          min: 10,
+          max: 20,
+          inclusiveMax: true,
+        },
       ],
     });
 
     render(QueryBuilder);
 
     const chips = screen.getAllByTestId("clause-chip");
-    expect(chips).toHaveLength(2);
+    expect(chips).toHaveLength(3);
     expect(chips[0].textContent).toContain("Agent.state = idle");
     expect(chips[1].textContent).toContain("Position.x in [0, 10)");
+    expect(chips[2].textContent).toContain("Position.y in [10, 20]");
   });
 
   it("clear button removes active query", async () => {

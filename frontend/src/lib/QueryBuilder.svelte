@@ -16,7 +16,15 @@
   let inputEl: HTMLInputElement | undefined = $state();
 
   const usedComponents = $derived(
-    new Set(world.activeQuery?.clauses.map((c) => c.component) ?? []),
+    new Set(
+      (world.activeQuery?.clauses ?? [])
+        .filter(
+          (clause) =>
+            (clause.type === "with" || clause.type === "without")
+            && clause.type === clauseType,
+        )
+        .map((clause) => clause.component),
+    ),
   );
 
   const availableComponents = $derived(getAvailableComponents(world.entities));
@@ -105,7 +113,25 @@
     const maxLabel = max === undefined || max === Infinity
       ? "..."
       : formatClauseNumber(max);
-    return `${clause.component}.${field} in [${minLabel}, ${maxLabel})`;
+    const closingBracket = clause.inclusiveMax ? "]" : ")";
+    return `${clause.component}.${field} in [${minLabel}, ${maxLabel}${closingBracket}`;
+  }
+
+  function clauseKey(clause: QueryClause): string {
+    const maxPart = clause.max === undefined
+      ? ""
+      : Number.isFinite(clause.max)
+      ? String(clause.max)
+      : "Infinity";
+    return [
+      clause.type,
+      clause.component,
+      clause.field ?? "",
+      clause.value ?? "",
+      clause.min === undefined ? "" : String(clause.min),
+      maxPart,
+      clause.inclusiveMax ? "1" : "0",
+    ].join("|");
   }
 </script>
 
@@ -128,7 +154,7 @@
       </span>
 
       <div class="flex items-center gap-1 overflow-x-auto">
-        {#each world.activeQuery?.clauses ?? [] as clause, i (i)}
+        {#each world.activeQuery?.clauses ?? [] as clause, i (clauseKey(clause))}
           <span
             class="flex items-center gap-1 rounded px-2 py-0.5 text-xs {chipColor(clause)}"
             data-testid="clause-chip"

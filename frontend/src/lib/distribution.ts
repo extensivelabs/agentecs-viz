@@ -160,8 +160,17 @@ function asNumericDistribution(
   bucketCount: number,
 ): NumericDistribution {
   const numericValues = values as Array<{ entityId: number; value: number }>;
-  const min = Math.min(...numericValues.map((entry) => entry.value));
-  const max = Math.max(...numericValues.map((entry) => entry.value));
+  let min = Infinity;
+  let max = -Infinity;
+
+  for (const entry of numericValues) {
+    if (entry.value < min) {
+      min = entry.value;
+    }
+    if (entry.value > max) {
+      max = entry.value;
+    }
+  }
 
   if (min === max) {
     return {

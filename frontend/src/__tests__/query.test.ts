@@ -29,6 +29,9 @@ const entityWithNonNumeric = makeEntity(13, [
   { type_short: "Agent", data: { state: "idle", score: "high" } },
 ]);
 const entityWithoutAgent = makeEntity(14, [{ type_short: "Task", data: { status: "pending" } }]);
+const entityWithNaN = makeEntity(15, [
+  { type_short: "Agent", data: { state: "unknown", score: Number.NaN } },
+]);
 
 const entitiesWithValues = [
   entityWithValues,
@@ -36,6 +39,7 @@ const entitiesWithValues = [
   entityAtUpperBound,
   entityWithNonNumeric,
   entityWithoutAgent,
+  entityWithNaN,
 ];
 
 describe("matchesQuery", () => {
@@ -123,6 +127,25 @@ describe("matchesQuery", () => {
     expect(matchesQuery(entityWithOtherValue, q)).toBe(true);
     expect(matchesQuery(entityAtUpperBound, q)).toBe(false);
     expect(matchesQuery(entityWithNonNumeric, q)).toBe(false);
+    expect(matchesQuery(entityWithNaN, q)).toBe(false);
+  });
+
+  it("value_range supports inclusive upper bound when requested", () => {
+    const q: QueryDef = {
+      name: "",
+      clauses: [
+        {
+          type: "value_range",
+          component: "Agent",
+          field: "score",
+          min: 1,
+          max: 10,
+          inclusiveMax: true,
+        },
+      ],
+    };
+
+    expect(matchesQuery(entityAtUpperBound, q)).toBe(true);
   });
 
   it("WITH + value_eq clauses work together", () => {
