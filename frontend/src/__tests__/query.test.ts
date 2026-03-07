@@ -7,6 +7,7 @@ import {
   matchingEntityIds,
   type QueryDef,
 } from "../lib/query";
+import { serializeFilterValue } from "../lib/filter-value";
 import { makeEntity } from "./helpers";
 
 const agentPos = makeEntity(1, ["Agent", "Position"]);
@@ -15,6 +16,40 @@ const agentTask = makeEntity(3, ["Agent", "Task"]);
 const position = makeEntity(4, ["Position"]);
 
 const entities = [agentPos, task, agentTask, position];
+
+const entityWithValues = makeEntity(10, [
+  { type_short: "Agent", data: { state: "idle", score: 1 } },
+]);
+const entityWithOtherValue = makeEntity(11, [
+  { type_short: "Agent", data: { state: "working", score: 5 } },
+]);
+const entityAtUpperBound = makeEntity(12, [
+  { type_short: "Agent", data: { state: "idle", score: 10 } },
+]);
+const entityWithNonNumeric = makeEntity(13, [
+  { type_short: "Agent", data: { state: "idle", score: "high" } },
+]);
+const entityWithoutAgent = makeEntity(14, [{ type_short: "Task", data: { status: "pending" } }]);
+const entityWithNaN = makeEntity(15, [
+  { type_short: "Agent", data: { state: "unknown", score: Number.NaN } },
+]);
+const entityWithObjectValue = makeEntity(16, [
+  { type_short: "Agent", data: { meta: { b: 2, a: 1 } } },
+]);
+const entityWithEquivalentObjectValue = makeEntity(17, [
+  { type_short: "Agent", data: { meta: { a: 1, b: 2 } } },
+]);
+
+const entitiesWithValues = [
+  entityWithValues,
+  entityWithOtherValue,
+  entityAtUpperBound,
+  entityWithNonNumeric,
+  entityWithoutAgent,
+  entityWithNaN,
+  entityWithObjectValue,
+  entityWithEquivalentObjectValue,
+];
 
 describe("matchesQuery", () => {
   it("empty query matches everything", () => {
@@ -64,6 +99,99 @@ describe("matchesQuery", () => {
     expect(matchesQuery(agentTask, q)).toBe(false);
     expect(matchesQuery(task, q)).toBe(false);
   });
+
+  it("value_eq matches entities with matching field value", () => {
+    const q: QueryDef = {
+      name: "",
+      clauses: [
+        {
+          type: "value_eq",
+          component: "Agent",
+          field: "state",
+          value: "idle",
+        },
+      ],
+    };
+
+    expect(matchesQuery(entityWithValues, q)).toBe(true);
+    expect(matchesQuery(entityWithOtherValue, q)).toBe(false);
+    expect(matchesQuery(entityWithoutAgent, q)).toBe(false);
+  });
+
+  it("value_range matches numbers in [min, max)", () => {
+    const q: QueryDef = {
+      name: "",
+      clauses: [
+        {
+          type: "value_range",
+          component: "Agent",
+          field: "score",
+          min: 1,
+          max: 10,
+        },
+      ],
+    };
+
+    expect(matchesQuery(entityWithValues, q)).toBe(true);
+    expect(matchesQuery(entityWithOtherValue, q)).toBe(true);
+    expect(matchesQuery(entityAtUpperBound, q)).toBe(false);
+    expect(matchesQuery(entityWithNonNumeric, q)).toBe(false);
+    expect(matchesQuery(entityWithNaN, q)).toBe(false);
+  });
+
+  it("value_range supports inclusive upper bound when requested", () => {
+    const q: QueryDef = {
+      name: "",
+      clauses: [
+        {
+          type: "value_range",
+          component: "Agent",
+          field: "score",
+          min: 1,
+          max: 10,
+          inclusiveMax: true,
+        },
+      ],
+    };
+
+    expect(matchesQuery(entityAtUpperBound, q)).toBe(true);
+  });
+
+  it("WITH + value_eq clauses work together", () => {
+    const q: QueryDef = {
+      name: "",
+      clauses: [
+        { type: "with", component: "Agent" },
+        {
+          type: "value_eq",
+          component: "Agent",
+          field: "state",
+          value: "working",
+        },
+      ],
+    };
+
+    expect(matchesQuery(entityWithValues, q)).toBe(false);
+    expect(matchesQuery(entityWithOtherValue, q)).toBe(true);
+    expect(matchesQuery(entityWithoutAgent, q)).toBe(false);
+  });
+
+  it("value_eq uses stable serialization for object values", () => {
+    const q: QueryDef = {
+      name: "",
+      clauses: [
+        {
+          type: "value_eq",
+          component: "Agent",
+          field: "meta",
+          value: serializeFilterValue({ a: 1, b: 2 }) ?? "",
+        },
+      ],
+    };
+
+    expect(matchesQuery(entityWithObjectValue, q)).toBe(true);
+    expect(matchesQuery(entityWithEquivalentObjectValue, q)).toBe(true);
+  });
 });
 
 describe("getAvailableComponents", () => {
@@ -101,6 +229,22 @@ describe("queryMatchCount", () => {
   it("returns total count for empty query", () => {
     expect(queryMatchCount(entities, { name: "", clauses: [] })).toBe(4);
   });
+
+  it("counts entities for value clauses", () => {
+    const q: QueryDef = {
+      name: "",
+      clauses: [
+        {
+          type: "value_eq",
+          component: "Agent",
+          field: "state",
+          value: "idle",
+        },
+      ],
+    };
+
+    expect(queryMatchCount(entitiesWithValues, q)).toBe(3);
+  });
 });
 
 describe("matchingEntityIds", () => {
@@ -108,5 +252,23 @@ describe("matchingEntityIds", () => {
     const q: QueryDef = { name: "", clauses: [{ type: "with", component: "Position" }] };
     const ids = matchingEntityIds(entities, q);
     expect(ids).toEqual(new Set([1, 4]));
+  });
+
+  it("returns IDs for value_range clauses", () => {
+    const q: QueryDef = {
+      name: "",
+      clauses: [
+        {
+          type: "value_range",
+          component: "Agent",
+          field: "score",
+          min: 1,
+          max: 6,
+        },
+      ],
+    };
+
+    const ids = matchingEntityIds(entitiesWithValues, q);
+    expect(ids).toEqual(new Set([10, 11]));
   });
 });

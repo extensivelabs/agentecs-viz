@@ -58,6 +58,43 @@ describe("QueryBuilder", () => {
     expect(chips[1].textContent).toContain("Task");
   });
 
+  it("renders chips for value clauses", () => {
+    world.setQuery({
+      name: "",
+      clauses: [
+        {
+          type: "value_eq",
+          component: "Agent",
+          field: "state",
+          value: "idle",
+        },
+        {
+          type: "value_range",
+          component: "Position",
+          field: "x",
+          min: 0,
+          max: 10,
+        },
+        {
+          type: "value_range",
+          component: "Position",
+          field: "y",
+          min: 10,
+          max: 20,
+          inclusiveMax: true,
+        },
+      ],
+    });
+
+    render(QueryBuilder);
+
+    const chips = screen.getAllByTestId("clause-chip");
+    expect(chips).toHaveLength(3);
+    expect(chips[0].textContent).toContain("Agent.state = idle");
+    expect(chips[1].textContent).toContain("Position.x in [0, 10)");
+    expect(chips[2].textContent).toContain("Position.y in [10, 20]");
+  });
+
   it("clear button removes active query", async () => {
     world.setQuery({ name: "", clauses: [{ type: "with", component: "Agent" }] });
     render(QueryBuilder);
@@ -100,5 +137,22 @@ describe("QueryBuilder", () => {
     await waitFor(() => {
       expect(screen.getByText("Velocity")).toBeTruthy();
     });
+  });
+
+  it("does not suggest a component already used by the opposite clause type", async () => {
+    world.setQuery({
+      name: "",
+      clauses: [{ type: "with", component: "Agent" }],
+    });
+
+    render(QueryBuilder);
+    await fireEvent.click(screen.getByTestId("query-toggle"));
+    await fireEvent.click(screen.getByTestId("clause-type-without"));
+
+    const input = screen.getByTestId("component-input") as HTMLInputElement;
+    await fireEvent.focus(input);
+    await fireEvent.input(input, { target: { value: "Ag" } });
+
+    expect(screen.queryByText("Agent")).toBeNull();
   });
 });

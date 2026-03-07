@@ -16,7 +16,13 @@
   let inputEl: HTMLInputElement | undefined = $state();
 
   const usedComponents = $derived(
-    new Set(world.activeQuery?.clauses.map((c) => c.component) ?? []),
+    new Set(
+      (world.activeQuery?.clauses ?? [])
+        .filter(
+          (clause) => clause.type === "with" || clause.type === "without",
+        )
+        .map((clause) => clause.component),
+    ),
   );
 
   const availableComponents = $derived(getAvailableComponents(world.entities));
@@ -29,7 +35,16 @@
 
   function addClause(component: string): void {
     const existing = world.activeQuery?.clauses ?? [];
-    if (existing.some((c) => c.component === component)) return;
+    if (
+      existing.some(
+        (c) =>
+          (c.type === "with" || c.type === "without")
+          && c.component === component,
+      )
+    ) {
+      return;
+    }
+
     const clause: QueryClause = { type: clauseType, component };
     const clauses = [...existing, clause];
     world.setQuery({ name: world.activeQuery?.name ?? "", clauses });
@@ -64,6 +79,57 @@
     saveName = "";
     showSaveInput = false;
   }
+
+  function chipColor(clause: QueryClause): string {
+    if (clause.type === "with") return "bg-emerald-500/20 text-emerald-400";
+    if (clause.type === "without") return "bg-red-500/20 text-red-400";
+    return "bg-blue-500/20 text-blue-400";
+  }
+
+  function formatClauseNumber(value: number): string {
+    if (!Number.isFinite(value)) return String(value);
+    if (Number.isInteger(value)) return String(value);
+
+    const rounded = value.toFixed(2);
+    return rounded.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
+  }
+
+  function chipLabel(clause: QueryClause): string {
+    if (clause.type === "with") return `WITH ${clause.component}`;
+    if (clause.type === "without") return `NOT ${clause.component}`;
+
+    const field = clause.field ?? "?";
+
+    if (clause.type === "value_eq") {
+      return `${clause.component}.${field} = ${clause.value ?? "?"}`;
+    }
+
+    const min = clause.min;
+    const max = clause.max;
+    const minLabel = min === undefined ? "..." : formatClauseNumber(min);
+    const maxLabel = max === undefined || max === Infinity
+      ? "..."
+      : formatClauseNumber(max);
+    const closingBracket = clause.inclusiveMax ? "]" : ")";
+    return `${clause.component}.${field} in [${minLabel}, ${maxLabel}${closingBracket}`;
+  }
+
+  function clauseKey(clause: QueryClause): string {
+    const maxPart = clause.max === undefined
+      ? ""
+      : Number.isFinite(clause.max)
+      ? String(clause.max)
+      : "Infinity";
+    return [
+      clause.type,
+      clause.component,
+      clause.field ?? "",
+      clause.value ?? "",
+      clause.min === undefined ? "" : String(clause.min),
+      maxPart,
+      clause.inclusiveMax ? "1" : "0",
+    ].join("|");
+  }
 </script>
 
 <div class="border-b border-bg-tertiary" data-testid="query-builder">
@@ -84,14 +150,13 @@
         {world.matchCount}/{world.entityCount}
       </span>
 
-      <!-- Inline clause chips (visible even when collapsed) -->
       <div class="flex items-center gap-1 overflow-x-auto">
-        {#each world.activeQuery?.clauses ?? [] as clause, i (clause.component)}
+        {#each world.activeQuery?.clauses ?? [] as clause, i (clauseKey(clause))}
           <span
-            class="flex items-center gap-1 rounded px-2 py-0.5 text-xs {clause.type === 'with' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}"
+            class="flex items-center gap-1 rounded px-2 py-0.5 text-xs {chipColor(clause)}"
             data-testid="clause-chip"
           >
-            {clause.type === "with" ? "WITH" : "NOT"} {clause.component}
+            {chipLabel(clause)}
             <button
               type="button"
               class="ml-0.5 hover:text-text-primary"
@@ -113,7 +178,6 @@
 
   {#if expanded}
     <div class="border-t border-bg-tertiary px-4 py-2" data-testid="query-builder-expanded">
-      <!-- Clause builder -->
       <div class="flex items-center gap-2">
         <div class="flex items-center gap-1 rounded bg-bg-secondary px-1.5 py-0.5 text-sm">
           <button
@@ -159,7 +223,6 @@
         </div>
       </div>
 
-      <!-- Saved queries + save -->
       <div class="mt-2 flex items-center gap-2">
         {#if world.savedQueries.length > 0}
           <div class="flex flex-wrap items-center gap-1">

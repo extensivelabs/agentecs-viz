@@ -18,11 +18,49 @@ describe("InspectorPanel", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows empty state when no entity selected", () => {
+  it("shows distribution empty state when no entities are available", () => {
     const { container } = render(InspectorPanel);
     const empty = container.querySelector("[data-testid='inspector-empty']");
     expect(empty).toBeTruthy();
-    expect(empty!.textContent).toContain("Select an entity to inspect");
+    expect(empty!.textContent).toContain("No entities available");
+  });
+
+  it("shows distribution controls when entities exist and nothing is selected", () => {
+    setWorldState([
+      makeEntity(1, [{ type_short: "Agent", data: { state: "idle" } }]),
+      makeEntity(2, [{ type_short: "Agent", data: { state: "working" } }]),
+    ]);
+
+    const { container } = render(InspectorPanel);
+    expect(container.querySelector("[data-testid='distribution-title']")).toBeTruthy();
+    expect(container.querySelector("[data-testid='distribution-component-select']")).toBeTruthy();
+    expect(container.querySelector("[data-testid='distribution-field-select']")).toBeTruthy();
+  });
+
+  it("applies a value filter when a distribution bar is clicked", async () => {
+    setWorldState([
+      makeEntity(1, [{ type_short: "Agent", data: { state: "idle" } }]),
+      makeEntity(2, [{ type_short: "Agent", data: { state: "working" } }]),
+      makeEntity(3, [{ type_short: "Agent", data: { state: "idle" } }]),
+    ]);
+
+    const { container } = render(InspectorPanel);
+    const bars = container.querySelectorAll("[data-testid='distribution-bar']");
+    expect(bars.length).toBeGreaterThan(0);
+
+    await fireEvent.click(bars[0]);
+
+    expect(world.activeQuery).toEqual({
+      name: "",
+      clauses: [
+        {
+          type: "value_eq",
+          component: "Agent",
+          field: "state",
+          value: "idle",
+        },
+      ],
+    });
   });
 
   it("shows entity header with ID and archetype", () => {
@@ -64,7 +102,6 @@ describe("InspectorPanel", () => {
     expect(sections.length).toBe(2);
 
     const labels = [...sections].map((s) => s.querySelector("[data-testid='component-toggle']")!.textContent);
-    // Alpha should come first
     expect(labels[0]).toContain("Alpha");
     expect(labels[1]).toContain("Zeta");
   });
