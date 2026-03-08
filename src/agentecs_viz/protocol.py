@@ -85,6 +85,12 @@ class SeekCommand(BaseModel):
     tick: int = Field(ge=0)
 
 
+class GetSnapshotCommand(BaseModel):
+    command: Literal["get_snapshot"] = "get_snapshot"
+    tick: int = Field(ge=0)
+    request_id: str = Field(min_length=1)
+
+
 class SetSpeedCommand(BaseModel):
     command: Literal["set_speed"] = "set_speed"
     ticks_per_second: float = Field(gt=0)
@@ -103,7 +109,7 @@ class StepCommand(BaseModel):
 
 
 ClientMessage = Annotated[
-    SeekCommand | SetSpeedCommand | PauseCommand | ResumeCommand | StepCommand,
+    GetSnapshotCommand | SeekCommand | SetSpeedCommand | PauseCommand | ResumeCommand | StepCommand,
     Field(discriminator="command"),
 ]
 
@@ -115,6 +121,13 @@ ClientMessage = Annotated[
 
 class SnapshotMessage(BaseModel):
     type: Literal["snapshot"] = "snapshot"
+    tick: int
+    snapshot: WorldSnapshot
+
+
+class SnapshotResponseMessage(BaseModel):
+    type: Literal["snapshot_response"] = "snapshot_response"
+    request_id: str
     tick: int
     snapshot: WorldSnapshot
 
@@ -183,6 +196,7 @@ class MetadataMessage(BaseModel):
 
 AnyServerEvent = (
     SnapshotMessage
+    | SnapshotResponseMessage
     | DeltaMessage
     | ErrorMessage
     | ErrorEventMessage

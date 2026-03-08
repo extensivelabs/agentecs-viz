@@ -76,6 +76,24 @@ describe("isServerMessage", () => {
     ).toBe(true);
   });
 
+  it("accepts valid snapshot_response payload", () => {
+    expect(
+      isServerMessage({
+        type: "snapshot_response",
+        request_id: "req-1",
+        tick: 1,
+        snapshot: {
+          tick: 1,
+          timestamp: 1700000000,
+          entity_count: 0,
+          entities: [],
+          archetypes: [],
+          metadata: {},
+        },
+      }),
+    ).toBe(true);
+  });
+
   it("rejects malformed metadata payload", () => {
     expect(
       isServerMessage({

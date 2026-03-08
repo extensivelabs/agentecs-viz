@@ -1,6 +1,8 @@
 from collections.abc import AsyncIterator
 from typing import Any
 
+import pytest
+
 from agentecs_viz.config import VisualizationConfig
 from agentecs_viz.protocol import (
     AnyServerEvent,
@@ -8,12 +10,14 @@ from agentecs_viz.protocol import (
     ErrorEventMessage,
     ErrorMessage,
     ErrorSeverity,
+    GetSnapshotCommand,
     MetadataMessage,
     PauseCommand,
     ResumeCommand,
     SeekCommand,
     SetSpeedCommand,
     SnapshotMessage,
+    SnapshotResponseMessage,
     SpanEventMessage,
     SpanStatus,
     StepCommand,
@@ -24,6 +28,12 @@ from agentecs_viz.snapshot import TickDelta, WorldSnapshot
 
 
 class TestClientMessages:
+    def test_get_snapshot(self):
+        msg = GetSnapshotCommand(tick=42, request_id="req-1")
+        assert msg.command == "get_snapshot"
+        assert msg.tick == 42
+        assert msg.request_id == "req-1"
+
     def test_seek(self):
         msg = SeekCommand(tick=42)
         assert msg.command == "seek"
@@ -52,12 +62,23 @@ class TestClientMessages:
         restored = SeekCommand.model_validate(data)
         assert restored.tick == 10
 
+    def test_get_snapshot_requires_request_id(self):
+        with pytest.raises(ValueError):
+            GetSnapshotCommand(tick=1, request_id="")
+
 
 class TestServerMessages:
     def test_snapshot_message(self):
         ws = WorldSnapshot(tick=5)
         msg = SnapshotMessage(tick=5, snapshot=ws)
         assert msg.type == "snapshot"
+        assert msg.snapshot.tick == 5
+
+    def test_snapshot_response_message(self):
+        ws = WorldSnapshot(tick=5)
+        msg = SnapshotResponseMessage(request_id="req-1", tick=5, snapshot=ws)
+        assert msg.type == "snapshot_response"
+        assert msg.request_id == "req-1"
         assert msg.snapshot.tick == 5
 
     def test_delta_message(self):
@@ -88,6 +109,14 @@ class TestServerMessages:
         data = msg.model_dump()
         restored = SnapshotMessage.model_validate(data)
         assert restored.tick == 1
+
+    def test_snapshot_response_roundtrip(self):
+        ws = WorldSnapshot(tick=2)
+        msg = SnapshotResponseMessage(request_id="req-2", tick=2, snapshot=ws)
+        data = msg.model_dump()
+        restored = SnapshotResponseMessage.model_validate(data)
+        assert restored.request_id == "req-2"
+        assert restored.tick == 2
 
 
 class TestErrorEventMessage:
@@ -242,6 +271,7 @@ class TestAnyServerEvent:
     def test_union_contains_all_message_types(self):
         expected = {
             SnapshotMessage,
+            SnapshotResponseMessage,
             DeltaMessage,
             ErrorMessage,
             ErrorEventMessage,

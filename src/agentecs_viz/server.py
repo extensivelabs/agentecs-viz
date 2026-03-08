@@ -14,12 +14,14 @@ from agentecs_viz._version import __version__
 from agentecs_viz.protocol import (
     ClientMessage,
     ErrorMessage,
+    GetSnapshotCommand,
     MetadataMessage,
     PauseCommand,
     ResumeCommand,
     SeekCommand,
     SetSpeedCommand,
     SnapshotMessage,
+    SnapshotResponseMessage,
     StepCommand,
     TickUpdateMessage,
     WorldStateSource,
@@ -88,6 +90,20 @@ def create_app(
         await websocket.accept()
         logger.info("WebSocket client connected")
 
+        bootstrap_complete = asyncio.Event()
+
+        async def send_events() -> None:
+            try:
+                async for event in source.subscribe():
+                    await bootstrap_complete.wait()
+                    await websocket.send_text(event.model_dump_json())
+            except WebSocketDisconnect:
+                pass
+            except Exception:
+                logger.warning("Event stream failed", exc_info=True)
+
+        send_task = asyncio.create_task(send_events())
+
         meta_msg = MetadataMessage(
             tick=source.get_current_tick(),
             config=source.visualization_config,
@@ -103,6 +119,7 @@ def create_app(
             snapshot=snapshot,
         )
         await websocket.send_text(snapshot_msg.model_dump_json())
+        bootstrap_complete.set()
 
         async def receive_commands() -> None:
             try:
@@ -117,17 +134,7 @@ def create_app(
             except WebSocketDisconnect:
                 pass
 
-        async def send_events() -> None:
-            try:
-                async for event in source.subscribe():
-                    await websocket.send_text(event.model_dump_json())
-            except WebSocketDisconnect:
-                pass
-            except Exception:
-                logger.warning("Event stream failed", exc_info=True)
-
         receive_task = asyncio.create_task(receive_commands())
-        send_task = asyncio.create_task(send_events())
         tasks = {receive_task, send_task}
 
         try:
@@ -173,10 +180,18 @@ async def _handle_command(
         return
 
     match cmd:
+        case GetSnapshotCommand(tick=tick, request_id=request_id):
+            snapshot = await source.get_snapshot(tick)
+            snapshot_response = SnapshotResponseMessage(
+                request_id=request_id,
+                tick=snapshot.tick,
+                snapshot=snapshot,
+            )
+            await websocket.send_text(snapshot_response.model_dump_json())
         case SeekCommand(tick=tick):
             snapshot = await source.get_snapshot(tick)
-            msg = SnapshotMessage(tick=snapshot.tick, snapshot=snapshot)
-            await websocket.send_text(msg.model_dump_json())
+            snapshot_message = SnapshotMessage(tick=snapshot.tick, snapshot=snapshot)
+            await websocket.send_text(snapshot_message.model_dump_json())
         case PauseCommand() | ResumeCommand() | StepCommand():
             await source.send_command(cmd.command)
             snapshot = await source.get_snapshot()

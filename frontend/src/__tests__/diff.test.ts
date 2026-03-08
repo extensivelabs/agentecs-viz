@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { diffObjects, diffEntity, changedPaths } from "../lib/diff";
-import type { EntitySnapshot } from "../lib/types";
+import { diffObjects, diffEntity, diffWorld, changedPaths } from "../lib/diff";
+import type { EntitySnapshot, WorldSnapshot } from "../lib/types";
 
 describe("diffObjects", () => {
   it("returns empty for identical objects", () => {
@@ -150,6 +150,19 @@ describe("diffEntity", () => {
     expect(diff.components[0].fields).toHaveLength(1);
   });
 
+  it("recurses into nested fields for added components", () => {
+    const old = entity(1, [{ type_short: "A", data: { v: 1 } }]);
+    const cur = entity(1, [
+      { type_short: "A", data: { v: 1 } },
+      { type_short: "B", data: { nested: { x: 10, y: 20 } } },
+    ]);
+    const diff = diffEntity(old, cur);
+    expect(diff.components[0].fields).toEqual([
+      { path: ["nested", "x"], oldValue: undefined, newValue: 10, type: "added" },
+      { path: ["nested", "y"], oldValue: undefined, newValue: 20, type: "added" },
+    ]);
+  });
+
   it("detects removed component", () => {
     const old = entity(1, [
       { type_short: "A", data: { v: 1 } },
@@ -160,6 +173,19 @@ describe("diffEntity", () => {
     expect(diff.components).toHaveLength(1);
     expect(diff.components[0].componentType).toBe("B");
     expect(diff.components[0].status).toBe("removed");
+  });
+
+  it("recurses into nested fields for removed components", () => {
+    const old = entity(1, [
+      { type_short: "A", data: { v: 1 } },
+      { type_short: "B", data: { nested: { x: 10, y: 20 } } },
+    ]);
+    const cur = entity(1, [{ type_short: "A", data: { v: 1 } }]);
+    const diff = diffEntity(old, cur);
+    expect(diff.components[0].fields).toEqual([
+      { path: ["nested", "x"], oldValue: 10, newValue: undefined, type: "removed" },
+      { path: ["nested", "y"], oldValue: 20, newValue: undefined, type: "removed" },
+    ]);
   });
 
   it("detects modified component", () => {
@@ -204,5 +230,109 @@ describe("changedPaths", () => {
 
   it("returns empty set for empty changes", () => {
     expect(changedPaths([])).toEqual(new Set());
+  });
+});
+
+describe("diffWorld", () => {
+  function entity(
+    id: number,
+    components: { type_short: string; data: Record<string, unknown> }[],
+  ): EntitySnapshot {
+    return {
+      id,
+      archetype: components.map((component) => component.type_short),
+      components: components.map((component) => ({
+        type_name: `mod.${component.type_short}`,
+        type_short: component.type_short,
+        data: component.data,
+      })),
+    };
+  }
+
+  function snapshot(tick: number, entities: EntitySnapshot[]): WorldSnapshot {
+    return {
+      tick,
+      timestamp: tick,
+      entity_count: entities.length,
+      entities,
+      archetypes: [],
+      metadata: {},
+    };
+  }
+
+  it("returns an empty diff for identical snapshots", () => {
+    const world = snapshot(1, [entity(1, [{ type_short: "A", data: { value: 1 } }])]);
+    const diff = diffWorld(world, world);
+    expect(diff.summary).toEqual({
+      spawnedCount: 0,
+      destroyedCount: 0,
+      modifiedCount: 0,
+      totalFieldChanges: 0,
+    });
+    expect(diff.entries).toEqual([]);
+  });
+
+  it("detects spawned entities", () => {
+    const before = snapshot(1, []);
+    const after = snapshot(2, [entity(2, [{ type_short: "Agent", data: { name: "a" } }])]);
+    const diff = diffWorld(before, after);
+    expect(diff.summary.spawnedCount).toBe(1);
+    expect(diff.entries[0].changeType).toBe("spawned");
+    expect(diff.entries[0].entityId).toBe(2);
+  });
+
+  it("detects destroyed entities", () => {
+    const before = snapshot(1, [entity(3, [{ type_short: "Task", data: { status: "done" } }])]);
+    const after = snapshot(2, []);
+    const diff = diffWorld(before, after);
+    expect(diff.summary.destroyedCount).toBe(1);
+    expect(diff.entries[0].changeType).toBe("destroyed");
+    expect(diff.entries[0].entityId).toBe(3);
+  });
+
+  it("detects modified entities", () => {
+    const before = snapshot(1, [entity(1, [{ type_short: "Pos", data: { x: 0, y: 0 } }])]);
+    const after = snapshot(2, [entity(1, [{ type_short: "Pos", data: { x: 2, y: 0 } }])]);
+    const diff = diffWorld(before, after);
+    expect(diff.summary.modifiedCount).toBe(1);
+    expect(diff.entries[0].changeType).toBe("modified");
+    expect(diff.entries[0].totalChanges).toBe(1);
+  });
+
+  it("handles mixed spawned destroyed and modified entities", () => {
+    const before = snapshot(5, [
+      entity(1, [{ type_short: "Pos", data: { x: 0 } }]),
+      entity(2, [{ type_short: "Task", data: { status: "old" } }]),
+    ]);
+    const after = snapshot(8, [
+      entity(1, [{ type_short: "Pos", data: { x: 1 } }]),
+      entity(3, [{ type_short: "Agent", data: { name: "new" } }]),
+    ]);
+    const diff = diffWorld(before, after);
+    expect(diff.t1).toBe(5);
+    expect(diff.t2).toBe(8);
+    expect(diff.summary).toEqual({
+      spawnedCount: 1,
+      destroyedCount: 1,
+      modifiedCount: 1,
+      totalFieldChanges: 3,
+    });
+  });
+
+  it("counts nested fields for spawned and destroyed entities", () => {
+    const before = snapshot(1, [entity(2, [{ type_short: "Task", data: { meta: { status: "old", owner: "a" } } }])]);
+    const after = snapshot(2, [entity(3, [{ type_short: "Agent", data: { profile: { name: "new", state: "idle" } } }])]);
+    const diff = diffWorld(before, after);
+    expect(diff.summary.totalFieldChanges).toBe(4);
+    expect(diff.entries.find((entry) => entry.entityId === 2)?.totalChanges).toBe(2);
+    expect(diff.entries.find((entry) => entry.entityId === 3)?.totalChanges).toBe(2);
+  });
+
+  it("normalizes reversed tick order", () => {
+    const older = snapshot(2, []);
+    const newer = snapshot(1, [entity(1, [{ type_short: "A", data: { value: 1 } }])]);
+    const diff = diffWorld(older, newer);
+    expect(diff.t1).toBe(1);
+    expect(diff.t2).toBe(2);
   });
 });

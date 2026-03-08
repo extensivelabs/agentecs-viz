@@ -1,8 +1,10 @@
+import asyncio
 from collections.abc import AsyncGenerator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from agentecs_viz.protocol import TickUpdateMessage
 from agentecs_viz.server import create_app
 from agentecs_viz.sources.mock import MockWorldSource
 
@@ -112,6 +114,80 @@ class TestWebSocket:
             assert resp is not None and resp["type"] == "snapshot", "seek did not produce snapshot"
             assert resp["tick"] == 1
 
+    def test_get_snapshot_command_returns_tagged_response_without_mutating_source(self, source):
+        from starlette.testclient import TestClient
+
+        app = create_app(source)
+        with TestClient(app) as tc, tc.websocket_connect("/ws") as ws:
+            ws.receive_json()  # metadata
+            ws.receive_json()  # initial snapshot
+
+            ws.send_json({"command": "pause"})
+            for _ in range(20):
+                if ws.receive_json()["type"] == "tick_update":
+                    break
+
+            max_drain = 50
+            for _ in range(3):
+                ws.send_json({"command": "step"})
+                seen_tick_update = False
+                seen_snapshot = False
+                for _ in range(max_drain):
+                    msg = ws.receive_json()
+                    if msg["type"] == "tick_update":
+                        seen_tick_update = True
+                    elif msg["type"] == "snapshot":
+                        seen_snapshot = True
+                    if seen_tick_update and seen_snapshot:
+                        break
+
+            current_tick = source.get_current_tick()
+            assert source.is_paused is True
+
+            ws.send_json({"command": "get_snapshot", "tick": 1, "request_id": "req-1"})
+
+            resp = None
+            for _ in range(max_drain):
+                candidate = ws.receive_json()
+                if candidate["type"] == "snapshot_response":
+                    resp = candidate
+                    break
+
+            assert resp is not None
+            assert resp["type"] == "snapshot_response"
+            assert resp["request_id"] == "req-1"
+            assert resp["tick"] == 1
+            assert source.get_current_tick() == current_tick
+            assert source.is_paused is True
+
+    def test_connect_buffers_live_events_until_after_initial_snapshot(self, source):
+        from starlette.testclient import TestClient
+
+        class BootstrapEventSource(MockWorldSource):
+            def __init__(self) -> None:
+                super().__init__(entity_count=5, tick_interval=10.0)
+                self.bootstrap_event_sent = False
+
+            async def get_snapshot(self, tick: int | None = None):
+                snapshot = await super().get_snapshot(tick)
+                if tick is None and not self.bootstrap_event_sent and self._subscribers:
+                    self.bootstrap_event_sent = True
+                    await asyncio.sleep(0)
+                    await self._emit_event(
+                        TickUpdateMessage(
+                            tick=snapshot.tick,
+                            entity_count=snapshot.entity_count,
+                            is_paused=self.is_paused,
+                        )
+                    )
+                return snapshot
+
+        app = create_app(BootstrapEventSource())
+        with TestClient(app) as tc, tc.websocket_connect("/ws") as ws:
+            assert ws.receive_json()["type"] == "metadata"
+            assert ws.receive_json()["type"] == "snapshot"
+            assert ws.receive_json()["type"] == "tick_update"
+
 
 class TestCommandValidation:
     """Commands are validated through ClientMessage before dispatching."""
@@ -138,6 +214,15 @@ class TestCommandValidation:
             if last["type"] == "error":
                 return last
         raise AssertionError(f"Expected error response, last was {last}")
+
+    def _send_and_expect_type(self, ws, data: dict, message_type: str) -> dict:
+        ws.send_json(data)
+        last: dict = {}
+        for _ in range(self.MAX_DRAIN):
+            last = ws.receive_json()
+            if last["type"] == message_type:
+                return last
+        raise AssertionError(f"Expected {message_type} response, last was {last}")
 
     def test_unknown_command_rejected(self, app):
         from starlette.testclient import TestClient
@@ -206,10 +291,7 @@ class TestCommandValidation:
         with TestClient(app) as tc, tc.websocket_connect("/ws") as ws:
             self._pause_and_drain(ws)
             ws.send_json({"command": "set_speed", "ticks_per_second": 5.0})
-            # set_speed sends no ack — verify no error by sending a
-            # subsequent command that does ack
-            ws.send_json({"command": "pause"})
-            resp = ws.receive_json()
+            resp = self._send_and_expect_type(ws, {"command": "pause"}, "tick_update")
             assert resp["type"] == "tick_update"
 
     def test_error_response_is_typed_message(self, app):

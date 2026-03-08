@@ -682,6 +682,27 @@ describe("WorldState", () => {
         ticks_per_second: 5,
       });
     });
+
+    it("requests snapshots at an arbitrary tick", async () => {
+      state.connect("ws://test/ws");
+      const ws = MockWebSocket.instances[0];
+      ws.simulateOpen();
+
+      const promise = state.getSnapshotAtTick(3);
+      const command = JSON.parse(ws.sentMessages[0]);
+      expect(command.command).toBe("get_snapshot");
+      expect(command.tick).toBe(3);
+
+      const snapshot = makeSnapshot({ tick: 3 });
+      ws.simulateMessage({
+        type: "snapshot_response",
+        request_id: command.request_id,
+        tick: 3,
+        snapshot,
+      });
+
+      await expect(promise).resolves.toEqual(snapshot);
+    });
   });
 
   describe("diff tracking", () => {

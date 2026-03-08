@@ -10,6 +10,7 @@
   import ErrorPanel from "./lib/ErrorPanel.svelte";
   import QueryBuilder from "./lib/QueryBuilder.svelte";
   import TracesTab from "./lib/TracesTab.svelte";
+  import TemporalTab from "./lib/TemporalTab.svelte";
   import type { Tab } from "./lib/TabBar.svelte";
 
   const baseTabs: Tab[] = [
@@ -118,9 +119,7 @@
       {:else if activeTab === "traces"}
         <TracesTab />
       {:else if activeTab === "timeline"}
-        <div class="flex h-full items-center justify-center text-text-muted text-base">
-          Timeline Analysis (REQ-015)
-        </div>
+        <TemporalTab />
       {:else if activeTab === "archetypes"}
         <div class="flex h-full items-center justify-center text-text-muted text-base">
           Archetypes View (REQ-017)

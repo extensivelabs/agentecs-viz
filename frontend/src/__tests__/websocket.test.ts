@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { WebSocketClient, createWebSocketClient } from "../lib/websocket";
 import type { WebSocketCallbacks } from "../lib/websocket";
 import type { ConnectionState, ServerMessage } from "../lib/types";
-import { MockWebSocket } from "./helpers";
+import { MockWebSocket, makeSnapshot } from "./helpers";
 
 function setupCallbacks() {
   const states: ConnectionState[] = [];
@@ -163,6 +163,46 @@ describe("WebSocketClient", () => {
 
     client.pause();
     expect(MockWebSocket.instances).toHaveLength(0);
+  });
+
+  it("requests a snapshot and resolves the matching response", async () => {
+    const { messages, callbacks } = setupCallbacks();
+    const client = new WebSocketClient("ws://test/ws", callbacks);
+
+    client.connect();
+    const ws = MockWebSocket.instances[0];
+    ws.simulateOpen();
+
+    const promise = client.getSnapshot(4);
+    const command = JSON.parse(ws.sentMessages[0]);
+    expect(command.command).toBe("get_snapshot");
+    expect(command.tick).toBe(4);
+    expect(typeof command.request_id).toBe("string");
+
+    const snapshot = makeSnapshot({ tick: 4, entity_count: 0, entities: [], archetypes: [] });
+    ws.simulateMessage({
+      type: "snapshot_response",
+      request_id: command.request_id,
+      tick: 4,
+      snapshot,
+    });
+
+    await expect(promise).resolves.toEqual(snapshot);
+    expect(messages).toHaveLength(0);
+  });
+
+  it("rejects pending snapshot requests when disconnected", async () => {
+    const { callbacks } = setupCallbacks();
+    const client = new WebSocketClient("ws://test/ws", callbacks);
+
+    client.connect();
+    const ws = MockWebSocket.instances[0];
+    ws.simulateOpen();
+
+    const promise = client.getSnapshot(7);
+    client.disconnect();
+
+    await expect(promise).rejects.toThrow("WebSocket disconnected");
   });
 
   it("attempts reconnect on unexpected close", () => {
