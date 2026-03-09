@@ -20,6 +20,9 @@ execution:
 - ``seek``: requires ``tick >= 0``. On success, server replies with
   ``snapshot`` from ``source.get_snapshot(tick)`` (historical tick when
   available; otherwise source-defined fallback).
+- ``get_snapshot``: requires ``tick >= 0`` and a non-empty ``request_id``.
+  On success, server replies with ``snapshot_response`` carrying the same
+  ``request_id`` and the requested historical snapshot.
 - ``pause`` / ``resume`` / ``step``: no additional fields. On success, server
   replies with ``tick_update`` as an acknowledgement.
 - ``set_speed``: requires ``ticks_per_second > 0``. The command is applied with
@@ -34,6 +37,7 @@ All server messages are discriminated by the ``type`` field:
 - ``metadata``: initial capabilities and runtime metadata
   (config, tick range, pause/history support)
 - ``snapshot``: full world snapshot at a tick
+- ``snapshot_response``: tagged historical snapshot keyed by ``request_id``
 - ``delta``: incremental world update for a tick (source-dependent)
 - ``tick_update``: current tick summary and pause state
 - ``error``: protocol-level or command validation error text

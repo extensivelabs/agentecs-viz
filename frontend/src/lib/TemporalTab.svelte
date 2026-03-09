@@ -1,20 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import JsonTree from "./JsonTree.svelte";
-  import type { ComponentChanges } from "./diff";
-  import type { EntitySnapshot } from "./types";
+  import type { ComponentChanges, EntityChangeType, WorldDiffEntry } from "./diff";
   import { world } from "./state/world.svelte";
   import { archetypeKey, temporal } from "./state/temporal.svelte";
-
-  type EntityChangeType = "spawned" | "destroyed" | "modified";
-  interface WorldDiffEntry {
-    entityId: number;
-    changeType: EntityChangeType;
-    archetype: string[];
-    entity: EntitySnapshot;
-    components: ComponentChanges[];
-    totalChanges: number;
-  }
 
   type VisibleComponent = {
     type: string;
