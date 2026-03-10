@@ -604,6 +604,14 @@ export class WorldState {
     this.activeQuery = null;
   }
 
+  getSnapshotAtTick(tick: number): Promise<WorldSnapshot> {
+    if (!this.client) {
+      return Promise.reject(new Error("Not connected"));
+    }
+
+    return this.client.getSnapshot(tick);
+  }
+
   saveQuery(query: QueryDef): void {
     const name = query.name.trim();
     if (!name || query.clauses.length === 0) return;

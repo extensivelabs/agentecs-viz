@@ -40,6 +40,13 @@ export interface SnapshotMessage {
   snapshot: WorldSnapshot;
 }
 
+export interface SnapshotResponseMessage {
+  type: "snapshot_response";
+  request_id: string;
+  tick: number;
+  snapshot: WorldSnapshot;
+}
+
 export interface DeltaMessage {
   type: "delta";
   tick: number;
@@ -94,6 +101,7 @@ export interface SpanEventMessage {
 
 export type ServerMessage =
   | SnapshotMessage
+  | SnapshotResponseMessage
   | DeltaMessage
   | ErrorMessage
   | ErrorEventMessage
@@ -106,6 +114,7 @@ export type ClientCommand =
   | { command: "pause" }
   | { command: "resume" }
   | { command: "step" }
+  | { command: "get_snapshot"; tick: number; request_id: string }
   | { command: "seek"; tick: number }
   | { command: "set_speed"; ticks_per_second: number };
 
@@ -250,6 +259,8 @@ export function isServerMessage(data: unknown): data is ServerMessage {
   switch (data.type) {
     case "snapshot":
       return isNumber(data.tick) && isWorldSnapshot(data.snapshot);
+    case "snapshot_response":
+      return isString(data.request_id) && isNumber(data.tick) && isWorldSnapshot(data.snapshot);
     case "delta":
       return isNumber(data.tick) && isTickDelta(data.delta);
     case "error":

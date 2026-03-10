@@ -6,6 +6,8 @@ import {
 import type {
   ClientCommand,
   ConnectionState,
+  SnapshotResponseMessage,
+  WorldSnapshot,
   ServerMessage,
 } from "./types";
 import { isServerMessage } from "./types";
@@ -33,6 +35,11 @@ export class WebSocketClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private intentionalClose = false;
+  private pendingSnapshotRequests = new Map<string, {
+    resolve: (snapshot: WorldSnapshot) => void;
+    reject: (error: Error) => void;
+    timeoutId: ReturnType<typeof setTimeout>;
+  }>();
 
   readonly url: string;
   private readonly callbacks: WebSocketCallbacks;
@@ -69,6 +76,10 @@ export class WebSocketClient {
       }
 
       if (isServerMessage(data)) {
+        if (data.type === "snapshot_response") {
+          this.handleSnapshotResponse(data);
+          return;
+        }
         this.callbacks.onMessage(data);
         return;
       }
@@ -88,6 +99,7 @@ export class WebSocketClient {
 
     ws.onclose = () => {
       this.ws = null;
+      this.rejectPendingSnapshotRequests(new Error("WebSocket connection closed"));
       if (this.intentionalClose) {
         this.callbacks.onStateChange("disconnected");
         return;
@@ -102,6 +114,7 @@ export class WebSocketClient {
   disconnect(): void {
     this.intentionalClose = true;
     this.cancelReconnect();
+    this.rejectPendingSnapshotRequests(new Error("WebSocket disconnected"));
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -126,6 +139,29 @@ export class WebSocketClient {
 
   step(): void {
     this.send({ command: "step" });
+  }
+
+  getSnapshot(tick: number): Promise<WorldSnapshot> {
+    const requestId = crypto.randomUUID();
+
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        if (!this.pendingSnapshotRequests.has(requestId)) return;
+        this.pendingSnapshotRequests.delete(requestId);
+        reject(new Error(`Snapshot request timed out for tick ${tick}`));
+      }, 10000);
+
+      this.pendingSnapshotRequests.set(requestId, { resolve, reject, timeoutId });
+      this.send({ command: "get_snapshot", tick, request_id: requestId });
+
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        const pending = this.pendingSnapshotRequests.get(requestId);
+        if (!pending) return;
+        clearTimeout(pending.timeoutId);
+        this.pendingSnapshotRequests.delete(requestId);
+        reject(new Error("WebSocket is not connected"));
+      }
+    });
   }
 
   seek(tick: number): void {
@@ -161,6 +197,26 @@ export class WebSocketClient {
       this.reconnectTimer = null;
     }
     this.reconnectAttempts = 0;
+  }
+
+  private handleSnapshotResponse(message: SnapshotResponseMessage): void {
+    const pending = this.pendingSnapshotRequests.get(message.request_id);
+    if (!pending) {
+      console.warn("[ws] unhandled snapshot response:", message.request_id);
+      return;
+    }
+
+    clearTimeout(pending.timeoutId);
+    this.pendingSnapshotRequests.delete(message.request_id);
+    pending.resolve(message.snapshot);
+  }
+
+  private rejectPendingSnapshotRequests(error: Error): void {
+    for (const pending of this.pendingSnapshotRequests.values()) {
+      clearTimeout(pending.timeoutId);
+      pending.reject(error);
+    }
+    this.pendingSnapshotRequests.clear();
   }
 }
 
