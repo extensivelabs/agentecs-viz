@@ -68,8 +68,6 @@ export class TemporalState {
   pageSize = 20;
   filters: TemporalFilters = $state(DEFAULT_FILTERS());
   expandedEntityIds: Set<number> = $state(new Set());
-  private snapshotT1Tick = $state<number | null>(null);
-  private snapshotT2Tick = $state<number | null>(null);
   private snapshotT1 = $state.raw<WorldSnapshot | null>(null);
   private snapshotT2 = $state.raw<WorldSnapshot | null>(null);
 
@@ -126,8 +124,6 @@ export class TemporalState {
     this.page = 0;
     this.filters = DEFAULT_FILTERS();
     this.expandedEntityIds = new Set();
-    this.snapshotT1Tick = null;
-    this.snapshotT2Tick = null;
     this.snapshotT1 = null;
     this.snapshotT2 = null;
   }
@@ -147,8 +143,6 @@ export class TemporalState {
         const snapshot = await world.getSnapshotAtTick(requestedT1);
         this.snapshotT1 = snapshot;
         this.snapshotT2 = snapshot;
-        this.snapshotT1Tick = requestedT1;
-        this.snapshotT2Tick = requestedT2;
       } else {
         const [snapshotT1, snapshotT2] = await Promise.all([
           world.getSnapshotAtTick(requestedT1),
@@ -156,8 +150,6 @@ export class TemporalState {
         ]);
         this.snapshotT1 = snapshotT1;
         this.snapshotT2 = snapshotT2;
-        this.snapshotT1Tick = requestedT1;
-        this.snapshotT2Tick = requestedT2;
       }
 
       this.page = 0;
@@ -165,8 +157,6 @@ export class TemporalState {
     } catch (error) {
       this.snapshotT1 = null;
       this.snapshotT2 = null;
-      this.snapshotT1Tick = null;
-      this.snapshotT2Tick = null;
       this.error = error instanceof Error ? error.message : String(error);
     } finally {
       this.loading = false;
