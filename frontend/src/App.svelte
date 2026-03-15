@@ -11,6 +11,7 @@
   import QueryBuilder from "./lib/QueryBuilder.svelte";
   import TracesTab from "./lib/TracesTab.svelte";
   import TemporalTab from "./lib/TemporalTab.svelte";
+  import ArchetypesTab from "./lib/ArchetypesTab.svelte";
   import type { Tab } from "./lib/TabBar.svelte";
 
   const baseTabs: Tab[] = [
@@ -121,9 +122,7 @@
       {:else if activeTab === "timeline"}
         <TemporalTab />
       {:else if activeTab === "archetypes"}
-        <div class="flex h-full items-center justify-center text-text-muted text-base">
-          Archetypes View (REQ-017)
-        </div>
+        <ArchetypesTab onOpenEntities={() => (activeTab = "entities")} />
       {:else if activeTab === "chat"}
         <div class="flex h-full items-center justify-center text-text-muted text-base">
           Chat View

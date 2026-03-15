@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { untrack } from "svelte";
+  import { archetypes } from "./state/archetypes.svelte";
   import { world } from "./state/world.svelte";
   import {
     formatCostUsd,
@@ -60,6 +62,23 @@
   let activeDiff = $derived(pinnedDiff ?? diff);
   let loopInfo = $derived(world.selectedEntityLoopInfo);
   let previousTick = $derived(world.previousSnapshot?.tick ?? 0);
+  let archetypeHistory = $derived(archetypes.selectedEntityHistory);
+  let archetypeHistoryError = $derived(archetypes.selectedEntityHistoryError);
+  let archetypeHistoryLoading = $derived(entity ? archetypes.loadingEntityId === entity.id : false);
+  let hasArchetypeTransitions = $derived(archetypeHistory.length > 1);
+
+  $effect(() => {
+    const entityId = entity?.id;
+    const currentTick = world.tick;
+    const minTick = world.minTick;
+    const historyConfig = world.config;
+
+    if (entityId == null || !historyConfig || !world.supportsHistory || currentTick < minTick) return;
+
+    untrack(() => {
+      void archetypes.ensureEntityHistory(entityId);
+    });
+  });
 
   function componentChanges(typeShort: string): ComponentChanges | undefined {
     return activeDiff?.components.find((c) => c.componentType === typeShort);
@@ -81,6 +100,10 @@
     const preview = fields.slice(0, 5).join(", ");
     if (fields.length <= 5) return preview;
     return `${preview}, +${fields.length - 5} more`;
+  }
+
+  function historyColor(archetype: string[]): string {
+    return resolveArchetypeColorCSS(archetype, world.archetypeConfigMap, world.config?.color_palette);
   }
 
   function close(): void {
@@ -200,6 +223,48 @@
               onclick={() => world.pinCurrentState()}
               data-testid="pin-state-btn"
             >Pin current state</button>
+          {/if}
+        </div>
+      {/if}
+
+      {#if world.supportsHistory}
+        <div class="border-b border-bg-tertiary px-4 py-2" data-testid="archetype-history">
+          <div class="mb-1 text-sm font-medium text-text-secondary">Archetype History</div>
+
+          {#if archetypeHistoryLoading}
+            <div class="text-sm text-text-muted" data-testid="archetype-history-loading">
+              Loading archetype history...
+            </div>
+          {:else if archetypeHistoryError}
+            <div class="text-sm text-error" data-testid="archetype-history-error">
+              {archetypeHistoryError}
+            </div>
+          {:else if !hasArchetypeTransitions}
+            <div class="text-sm text-text-muted" data-testid="archetype-history-empty">
+              No archetype changes through T{world.tick}
+            </div>
+            {#if archetypeHistory.length > 0}
+              <div class="mt-1 text-sm text-text-muted">
+                Spawned as <span class="text-text-secondary">{archetypeHistory[0].label}</span>
+                at T{archetypeHistory[0].tick}
+              </div>
+            {/if}
+          {:else}
+            <div class="space-y-1" data-testid="archetype-history-list">
+              {#each archetypeHistory as entry (entry.tick + ':' + entry.kind + ':' + entry.key)}
+                <div class="flex items-center gap-2 text-sm">
+                  <span class="font-mono text-text-muted">T{entry.tick}</span>
+                  <span
+                    class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                    style:background-color={historyColor(entry.archetype)}
+                  ></span>
+                  <span class="rounded px-1.5 py-0.5 text-xs text-text-secondary bg-bg-tertiary">
+                    {entry.kind === "spawned" ? "SPAWN" : "SHIFT"}
+                  </span>
+                  <span class="truncate text-text-primary">{entry.label}</span>
+                </div>
+              {/each}
+            </div>
           {/if}
         </div>
       {/if}

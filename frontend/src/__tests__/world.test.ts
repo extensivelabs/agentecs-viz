@@ -1454,6 +1454,36 @@ describe("WorldState", () => {
       expect(state.hasActiveFilter).toBe(false);
     });
 
+    it("applyArchetypeFilter sets an exact archetype clause", () => {
+      state.applyArchetypeFilter(["Position", "Agent"]);
+
+      expect(state.activeQuery).toEqual({
+        name: "",
+        clauses: [{ type: "archetype_eq", component: "Agent,Position" }],
+      });
+      expect(state.matchingEntityIds).toEqual(new Set([1]));
+    });
+
+    it("applyArchetypeFilter preserves non-archetype clauses and replaces prior archetype filters", () => {
+      state.setQuery({
+        name: "",
+        clauses: [
+          { type: "with", component: "Agent" },
+          { type: "archetype_eq", component: "Task" },
+        ],
+      });
+
+      state.applyArchetypeFilter(["Agent", "Task"]);
+
+      expect(state.activeQuery).toEqual({
+        name: "",
+        clauses: [
+          { type: "with", component: "Agent" },
+          { type: "archetype_eq", component: "Agent,Task" },
+        ],
+      });
+    });
+
     it("saveQuery stores named query", () => {
       state.saveQuery({ name: "agents", clauses: [{ type: "with", component: "Agent" }] });
       expect(state.savedQueries).toHaveLength(1);
