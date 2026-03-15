@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/svelte";
+import { fireEvent, render, screen } from "@testing-library/svelte";
 import App from "../App.svelte";
 import { world } from "../lib/state/world.svelte";
 import { MockWebSocket } from "./helpers";
@@ -112,6 +112,66 @@ describe("App", () => {
     await vi.waitFor(() => {
       expect(screen.getByRole("toolbar")).toBeTruthy();
     });
+  });
+
+  it("renders the Archetypes tab content instead of the placeholder", async () => {
+    render(App);
+
+    const ws = MockWebSocket.instances[0];
+    ws.simulateOpen();
+
+    ws.simulateMessage({
+      type: "metadata",
+      tick: 0,
+      config: {
+        world_name: "Test",
+        archetypes: [{ key: "Agent,Position", label: "Agent / Position" }],
+        component_metrics: [],
+        field_hints: { status_fields: [], error_fields: [] },
+        chat_enabled: false,
+        entity_label_template: null,
+        color_palette: null,
+      },
+      tick_range: [0, 5],
+      supports_history: true,
+      is_paused: false,
+    });
+
+    ws.simulateMessage({
+      type: "snapshot",
+      tick: 1,
+      snapshot: {
+        tick: 1,
+        timestamp: Date.now() / 1000,
+        entity_count: 1,
+        entities: [
+          {
+            id: 1,
+            archetype: ["Agent", "Position"],
+            components: [
+              { type_name: "mod.Agent", type_short: "Agent", data: {} },
+              { type_name: "mod.Position", type_short: "Position", data: {} },
+            ],
+          },
+        ],
+        archetypes: [["Agent", "Position"]],
+        metadata: {},
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Test")).toBeTruthy();
+    });
+
+    const archetypesTab = screen.getAllByRole("tab").find((tab) => tab.textContent?.includes("Archetypes"));
+    expect(archetypesTab).toBeTruthy();
+    await fireEvent.click(archetypesTab!);
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("archetypes-tab")).toBeTruthy();
+    });
+
+    expect(screen.getByText("Archetype Composition")).toBeTruthy();
   });
 
   it("shows token totals and budget warning in header", async () => {

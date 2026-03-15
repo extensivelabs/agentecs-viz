@@ -175,6 +175,95 @@ describe("InspectorPanel", () => {
     expect(world.selectedEntityId).toBeNull();
   });
 
+  it("shows archetype migration history when the selected entity changes archetype over time", async () => {
+    const currentEntity = makeEntity(1, ["Agent", "Position"]);
+    setWorldState([currentEntity], {
+      archetypes: [{ key: "Agent,Position", label: "Agent / Position" }],
+    });
+    world.supportsHistory = true;
+    world.tickRange = [1, 3];
+    world.snapshot = makeSnapshot({ tick: 3, entity_count: 1, entities: [currentEntity] });
+    world.selectEntity(1);
+
+    vi.spyOn(world, "getSnapshotAtTick").mockImplementation(async (tick) => {
+      switch (tick) {
+        case 1:
+          return makeSnapshot({ tick: 1, entity_count: 1, entities: [makeEntity(1, ["Agent"])] });
+        case 2:
+        case 3:
+          return makeSnapshot({ tick, entity_count: 1, entities: [makeEntity(1, ["Agent", "Position"])] });
+        default:
+          throw new Error(`Unexpected tick ${tick}`);
+      }
+    });
+
+    const { container } = render(InspectorPanel);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector("[data-testid='archetype-history-list']")).toBeTruthy();
+    });
+
+    const history = container.querySelector("[data-testid='archetype-history-list']");
+    expect(history!.textContent).toContain("SPAWN");
+    expect(history!.textContent).toContain("SHIFT");
+    expect(history!.textContent).toContain("Agent / Position");
+  });
+
+  it("shows a no-change archetype history state when the archetype stays stable", async () => {
+    const currentEntity = makeEntity(1, ["Agent"]);
+    setWorldState([currentEntity]);
+    world.supportsHistory = true;
+    world.tickRange = [1, 2];
+    world.snapshot = makeSnapshot({ tick: 2, entity_count: 1, entities: [currentEntity] });
+    world.selectEntity(1);
+
+    vi.spyOn(world, "getSnapshotAtTick").mockImplementation(async (tick) =>
+      makeSnapshot({ tick, entity_count: 1, entities: [currentEntity] }),
+    );
+
+    const { container } = render(InspectorPanel);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector("[data-testid='archetype-history-empty']")).toBeTruthy();
+    });
+
+    expect(container.textContent).toContain("No archetype changes through T2");
+  });
+
+  it("shows respawns in archetype history even without an archetype change", async () => {
+    const currentEntity = makeEntity(1, ["Agent"]);
+    setWorldState([currentEntity]);
+    world.supportsHistory = true;
+    world.tickRange = [1, 3];
+    world.snapshot = makeSnapshot({ tick: 3, entity_count: 1, entities: [currentEntity] });
+    world.selectEntity(1);
+
+    vi.spyOn(world, "getSnapshotAtTick").mockImplementation(async (tick) => {
+      switch (tick) {
+        case 1:
+          return makeSnapshot({ tick: 1, entity_count: 1, entities: [currentEntity] });
+        case 2:
+          return makeSnapshot({ tick: 2, entity_count: 0, entities: [] });
+        case 3:
+          return makeSnapshot({ tick: 3, entity_count: 1, entities: [currentEntity] });
+        default:
+          throw new Error(`Unexpected tick ${tick}`);
+      }
+    });
+
+    const { container } = render(InspectorPanel);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector("[data-testid='archetype-history-list']")).toBeTruthy();
+    });
+
+    const history = container.querySelector("[data-testid='archetype-history-list']");
+    expect(history!.textContent).toContain("T1");
+    expect(history!.textContent).toContain("T3");
+    expect(history!.textContent).toContain("SPAWN");
+    expect(container.querySelector("[data-testid='archetype-history-empty']")).toBeNull();
+  });
+
   it("updates when selected entity changes", async () => {
     const e1 = makeEntity(1, [{ type_short: "Foo", data: { val: "hello" } }]);
     const e2 = makeEntity(2, [{ type_short: "Bar", data: { val: "world" } }]);

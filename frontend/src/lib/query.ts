@@ -1,7 +1,8 @@
 import { serializeFilterValue } from "./filter-value";
 import type { EntitySnapshot } from "./types";
+import { getArchetypeKey } from "./utils";
 
-export type ClauseType = "with" | "without" | "value_eq" | "value_range";
+export type ClauseType = "with" | "without" | "archetype_eq" | "value_eq" | "value_range";
 
 export interface QueryClause {
   type: ClauseType;
@@ -25,6 +26,11 @@ export function matchesQuery(
   if (query.clauses.length === 0) return true;
 
   for (const clause of query.clauses) {
+    if (clause.type === "archetype_eq") {
+      if (getArchetypeKey(entity.archetype) !== clause.component) return false;
+      continue;
+    }
+
     const has = entity.archetype.includes(clause.component);
 
     if (clause.type === "with") {
