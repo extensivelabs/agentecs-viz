@@ -97,4 +97,42 @@ describe("ArchetypeState", () => {
       ]);
     });
   });
+
+  it("limits cached entity histories to the most recent inspected entities", async () => {
+    setWorldState([makeEntity(1, ["Agent"])]);
+    world.supportsHistory = true;
+    world.tickRange = [1, 1];
+    world.snapshot = makeSnapshot({ tick: 1, entity_count: 1, entities: [makeEntity(1, ["Agent"])] });
+
+    vi.spyOn(world, "getSnapshotAtTick").mockImplementation(async (tick) =>
+      makeSnapshot({ tick, entity_count: 1, entities: [makeEntity(1, ["Agent"])] }),
+    );
+
+    const state = new ArchetypeState();
+
+    for (let entityId = 1; entityId <= 17; entityId += 1) {
+      world.selectEntity(entityId);
+      await state.ensureEntityHistory(entityId);
+    }
+
+    expect(state.entityHistory.size).toBe(16);
+    expect(state.entityHistory.has(1)).toBe(false);
+    expect(state.entityHistory.has(17)).toBe(true);
+    expect(state.entityHistoryWindows.has(1)).toBe(false);
+  });
+
+  it("fails with a user-facing error when the history span is too large", async () => {
+    const currentEntity = makeEntity(1, ["Agent"]);
+    setWorldState([currentEntity]);
+    world.supportsHistory = true;
+    world.tickRange = [1, 241];
+    world.snapshot = makeSnapshot({ tick: 241, entity_count: 1, entities: [currentEntity] });
+    world.selectEntity(1);
+
+    const state = new ArchetypeState();
+
+    await state.ensureEntityHistory(1);
+
+    expect(state.selectedEntityHistoryError).toContain("Archetype history is limited to 240 ticks");
+  });
 });
