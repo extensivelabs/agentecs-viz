@@ -73,7 +73,7 @@
     const minTick = world.minTick;
     const historyConfig = world.config;
 
-    if (!entityId || !historyConfig || !world.supportsHistory || currentTick < minTick) return;
+    if (entityId == null || !historyConfig || !world.supportsHistory || currentTick < minTick) return;
 
     untrack(() => {
       void archetypes.ensureEntityHistory(entityId);

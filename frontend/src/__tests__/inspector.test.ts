@@ -264,6 +264,34 @@ describe("InspectorPanel", () => {
     expect(container.querySelector("[data-testid='archetype-history-empty']")).toBeNull();
   });
 
+  it("loads archetype history for entity id 0", async () => {
+    const currentEntity = makeEntity(0, ["Agent"]);
+    setWorldState([currentEntity]);
+    world.supportsHistory = true;
+    world.tickRange = [1, 2];
+    world.snapshot = makeSnapshot({ tick: 2, entity_count: 1, entities: [currentEntity] });
+    world.selectEntity(0);
+
+    vi.spyOn(world, "getSnapshotAtTick").mockImplementation(async (tick) => {
+      switch (tick) {
+        case 1:
+          return makeSnapshot({ tick: 1, entity_count: 0, entities: [] });
+        case 2:
+          return makeSnapshot({ tick: 2, entity_count: 1, entities: [currentEntity] });
+        default:
+          throw new Error(`Unexpected tick ${tick}`);
+      }
+    });
+
+    const { container } = render(InspectorPanel);
+
+    await vi.waitFor(() => {
+      expect(container.querySelector("[data-testid='archetype-history-empty']")).toBeTruthy();
+    });
+
+    expect(container.textContent).toContain("Spawned as");
+  });
+
   it("updates when selected entity changes", async () => {
     const e1 = makeEntity(1, [{ type_short: "Foo", data: { val: "hello" } }]);
     const e2 = makeEntity(2, [{ type_short: "Bar", data: { val: "world" } }]);
