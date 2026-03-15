@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { archetypes } from "./state/archetypes.svelte";
   import { world } from "./state/world.svelte";
   import {
@@ -70,10 +71,13 @@
     const entityId = entity?.id;
     const currentTick = world.tick;
     const minTick = world.minTick;
+    const historyConfig = world.config;
 
-    if (!entityId || !world.supportsHistory || currentTick < minTick) return;
+    if (!entityId || !historyConfig || !world.supportsHistory || currentTick < minTick) return;
 
-    void archetypes.ensureEntityHistory(entityId);
+    untrack(() => {
+      void archetypes.ensureEntityHistory(entityId);
+    });
   });
 
   function componentChanges(typeShort: string): ComponentChanges | undefined {
