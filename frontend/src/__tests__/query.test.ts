@@ -100,6 +100,17 @@ describe("matchesQuery", () => {
     expect(matchesQuery(task, q)).toBe(false);
   });
 
+  it("archetype_eq matches exact archetypes only", () => {
+    const q: QueryDef = {
+      name: "",
+      clauses: [{ type: "archetype_eq", component: "Agent,Position" }],
+    };
+
+    expect(matchesQuery(agentPos, q)).toBe(true);
+    expect(matchesQuery(agentTask, q)).toBe(false);
+    expect(matchesQuery(task, q)).toBe(false);
+  });
+
   it("value_eq matches entities with matching field value", () => {
     const q: QueryDef = {
       name: "",
@@ -270,5 +281,14 @@ describe("matchingEntityIds", () => {
 
     const ids = matchingEntityIds(entitiesWithValues, q);
     expect(ids).toEqual(new Set([10, 11]));
+  });
+
+  it("returns IDs for exact archetype clauses", () => {
+    const ids = matchingEntityIds(entities, {
+      name: "",
+      clauses: [{ type: "archetype_eq", component: "Agent,Position" }],
+    });
+
+    expect(ids).toEqual(new Set([1]));
   });
 });

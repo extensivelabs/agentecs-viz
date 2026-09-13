@@ -6,6 +6,7 @@
     type ClauseType,
     type QueryClause,
   } from "./query";
+  import { getArchetypeDisplay } from "./utils";
 
   let expanded = $state(false);
   let clauseType: ClauseType = $state("with");
@@ -81,9 +82,16 @@
   }
 
   function chipColor(clause: QueryClause): string {
-    if (clause.type === "with") return "bg-emerald-500/20 text-emerald-400";
-    if (clause.type === "without") return "bg-red-500/20 text-red-400";
-    return "bg-blue-500/20 text-blue-400";
+    switch (clause.type) {
+      case "with":
+        return "bg-emerald-500/20 text-emerald-400";
+      case "without":
+        return "bg-red-500/20 text-red-400";
+      case "archetype_eq":
+        return "bg-sky-500/20 text-sky-400";
+      default:
+        return "bg-blue-500/20 text-blue-400";
+    }
   }
 
   function formatClauseNumber(value: number): string {
@@ -95,8 +103,20 @@
   }
 
   function chipLabel(clause: QueryClause): string {
-    if (clause.type === "with") return `WITH ${clause.component}`;
-    if (clause.type === "without") return `NOT ${clause.component}`;
+    switch (clause.type) {
+      case "with":
+        return `WITH ${clause.component}`;
+      case "without":
+        return `NOT ${clause.component}`;
+      case "archetype_eq": {
+        const fallbackLabel = getArchetypeDisplay(
+          clause.component ? clause.component.split(",") : [],
+        );
+        const label = world.archetypeConfigMap.get(clause.component)?.label
+          ?? (fallbackLabel || "(empty)");
+        return `ARCHETYPE ${label}`;
+      }
+    }
 
     const field = clause.field ?? "?";
 

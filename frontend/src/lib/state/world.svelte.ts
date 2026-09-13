@@ -23,7 +23,7 @@ import type {
   VisualizationConfig,
   WorldSnapshot,
 } from "../types";
-import { entityHash } from "../utils";
+import { entityHash, getArchetypeKey } from "../utils";
 import { WebSocketClient } from "../websocket";
 
 type AggregatedSpanUsage = {
@@ -602,6 +602,20 @@ export class WorldState {
 
   clearQuery(): void {
     this.activeQuery = null;
+  }
+
+  applyArchetypeFilter(archetype: string[]): void {
+    const archetypeKey = getArchetypeKey(archetype);
+    const existing = this.activeQuery?.clauses ?? [];
+    const clauses = [
+      ...existing.filter((clause) => clause.type !== "archetype_eq"),
+      { type: "archetype_eq", component: archetypeKey } as const,
+    ];
+
+    this.setQuery({
+      name: this.activeQuery?.name ?? "",
+      clauses,
+    });
   }
 
   getSnapshotAtTick(tick: number): Promise<WorldSnapshot> {

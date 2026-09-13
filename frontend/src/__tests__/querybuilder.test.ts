@@ -95,6 +95,26 @@ describe("QueryBuilder", () => {
     expect(chips[2].textContent).toContain("Position.y in [10, 20]");
   });
 
+  it("renders a readable chip for exact archetype clauses", () => {
+    setWorldState(
+      [makeEntity(1, ["Agent", "Position"])],
+      {
+        archetypes: [{ key: "Agent,Position", label: "Agent / Position" }],
+      },
+    );
+
+    world.setQuery({
+      name: "",
+      clauses: [{ type: "archetype_eq", component: "Agent,Position" }],
+    });
+
+    render(QueryBuilder);
+
+    const chip = screen.getByTestId("clause-chip");
+    expect(chip.textContent).toContain("ARCHETYPE");
+    expect(chip.textContent).toContain("Agent / Position");
+  });
+
   it("clear button removes active query", async () => {
     world.setQuery({ name: "", clauses: [{ type: "with", component: "Agent" }] });
     render(QueryBuilder);
