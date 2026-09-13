@@ -137,9 +137,10 @@ tasks:
     internal: true
     dir: frontend
     cmds:
-      - npm install
+      - npm ci
     status:
-      - test -d node_modules
+      - test -x node_modules/.bin/vite
+      - test node_modules/.package-lock.json -nt package-lock.json
 
   _install-hooks:
     internal: true
