@@ -1,4 +1,5 @@
 <script lang="ts">
+    import AboutModal from "./AboutModal.svelte";
     import { world } from "./state/world.svelte";
     import { formatCostUsd, formatTokens } from "./utils";
 
@@ -36,13 +37,6 @@
         } else if (e.key === "Escape") {
             e.preventDefault();
             cancelTick();
-        }
-    }
-
-    function handleAboutKeydown(e: KeyboardEvent) {
-        if (isAboutOpen && e.key === "Escape") {
-            e.preventDefault();
-            isAboutOpen = false;
         }
     }
 
@@ -157,38 +151,6 @@
     </div>
 </header>
 
-<svelte:window onkeydown={handleAboutKeydown} />
-
 {#if isAboutOpen}
-    <div
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-    >
-        <div
-            class="w-80 rounded border border-bg-tertiary bg-bg-secondary p-4 shadow-lg"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="about-title"
-        >
-            <div class="flex items-start justify-between gap-4">
-                <h2
-                    class="text-base font-medium text-text-primary"
-                    id="about-title"
-                >
-                    About AgentECS Visualizer
-                </h2>
-                <button
-                    class="text-text-muted hover:text-text-primary"
-                    type="button"
-                    onclick={() => (isAboutOpen = false)}
-                    aria-label="Close about modal"
-                >
-                    ✕
-                </button>
-            </div>
-            <p class="mt-2 text-sm text-text-secondary">
-                Inspect entities, traces, timelines, and runtime state from your
-                AgentECS world.
-            </p>
-        </div>
-    </div>
+    <AboutModal onClose={() => (isAboutOpen = false)} />
 {/if}

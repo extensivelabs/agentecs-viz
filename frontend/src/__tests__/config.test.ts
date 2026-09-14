@@ -16,6 +16,12 @@ describe("config", () => {
     expect(config.WS_URL.endsWith("/ws")).toBe(true);
   });
 
+  it("builds API base URL from browser location", async () => {
+    const config = await loadConfigModule();
+    expect(config.API_BASE_URL).toMatch(/^https?:\/\//);
+    expect(config.API_BASE_URL.endsWith("/")).toBe(false);
+  });
+
   it("reads token cost budget from env", async () => {
     vi.stubEnv("VITE_TOKEN_COST_BUDGET_USD", "2.5");
     const config = await loadConfigModule();

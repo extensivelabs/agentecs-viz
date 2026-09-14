@@ -31,32 +31,4 @@ describe("Header", () => {
 
     expect(seekSpy).not.toHaveBeenCalled();
   });
-
-  it("opens the about modal from the header", async () => {
-    render(Header);
-
-    await fireEvent.click(screen.getByRole("button", { name: "About" }));
-
-    expect(
-      screen.getByRole("dialog", { name: "About AgentECS Visualizer" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByText(
-        "Inspect entities, traces, timelines, and runtime state from your AgentECS world.",
-      ),
-    ).toBeTruthy();
-  });
-
-  it("closes the about modal when the close button is clicked", async () => {
-    render(Header);
-
-    await fireEvent.click(screen.getByRole("button", { name: "About" }));
-    await fireEvent.click(
-      screen.getByRole("button", { name: "Close about modal" }),
-    );
-
-    expect(
-      screen.queryByRole("dialog", { name: "About AgentECS Visualizer" }),
-    ).toBeNull();
-  });
 });
