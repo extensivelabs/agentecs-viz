@@ -3,6 +3,10 @@ const wsProtocol = loc?.protocol === "https:" ? "wss:" : "ws:";
 
 export const WS_URL = loc ? `${wsProtocol}//${loc.host}/ws` : "ws://localhost:8000/ws";
 
+export const API_BASE_URL = loc
+  ? `${loc.protocol}//${loc.host}`
+  : "http://localhost:8000";
+
 export const RECONNECT_MAX_ATTEMPTS = 10;
 export const RECONNECT_BASE_DELAY_MS = 1000;
 export const RECONNECT_MAX_DELAY_MS = 30000;
